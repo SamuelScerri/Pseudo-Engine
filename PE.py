@@ -8,6 +8,7 @@ screen_surface = pygame.display.set_mode(SIZE, pygame.SCALED | pygame.FULLSCREEN
 image = pygame.image.load("texture.png").convert()
 image_2 = pygame.image.load("texture2.png").convert()
 image_3 = pygame.image.load("texture3.png").convert()
+floor = pygame.Rect(64, 64, 64, 64)
 
 def check_intersection(wall_1, wall_2):
 	x1, y1 = wall_1.start_position
@@ -113,11 +114,11 @@ class Player:
 			closest_wall, smallest_distance, texture_distance = get_closest_wall(walls)
 			#print(texture_distance)
 
-			smallest_distance *= math.cos(radian - math.radians(self.angle))
+			new_smallest_distance = smallest_distance * math.cos(radian - math.radians(self.angle))
 
 			if smallest_distance != 0:
-				wall_height = math.floor(half_height / smallest_distance)
-				color_darkness = lerp(0, 1, 1 / smallest_distance) * 255 * 2
+				wall_height = math.floor(half_height / new_smallest_distance) * (SIZE[0] / SIZE[1])
+				color_darkness = lerp(0, 1, 1 / new_smallest_distance) * 255 * 2
 				if color_darkness > 255:
 					color_darkness = 255
 
@@ -127,7 +128,37 @@ class Player:
 					texture_distance = texture_distance % 1
 				surface.blit(new_surface, (x, half_height - wall_height, 1, 0), (texture_distance * 64, 0, 1, wall_height * 2))
 
-			#pygame.draw.line(surface, (255, 255, 255), self.position, translated_point)
+				#sized_floor = pygame.transform.scale(image, (floor[2], floor[3]))
+
+				for y in range(int(half_height + wall_height), int(SIZE[1])):
+					new_distance = SIZE[1] / (2 * y - SIZE[1])
+					new_distance /= math.cos(radian - math.radians(self.angle))
+
+					new_translated_point = (
+						self.position[0] + new_distance * math.cos(radian),
+						self.position[1] + new_distance * math.sin(radian)
+					)
+
+					if floor.collidepoint(new_translated_point):
+						texture_coordinate = (
+							new_translated_point[0] - floor[0],
+							new_translated_point[1] - floor[1]
+						)
+
+						#final_point = (int((new_translated_point[0] * 64) % 64), int((new_translated_point[1] * 64) % 64))
+						final_point = (
+							int((texture_coordinate[0] * 32) % floor[2]),
+							int((texture_coordinate[1] * 32) % floor[3])
+						)
+
+						#print((texture_coordinate[0] * 64) % 64)
+
+						surface.set_at((x, SIZE[1] - y), image_2.get_at(final_point))
+						surface.set_at((x, y), image_2.get_at(final_point))
+
+
+					#pygame.draw.line(surface, (255, 255, 255), self.position, translated_point)
+					#pygame.draw.line(surface, (255, 255, 255), (x, half_height + wall_height), (x, half_height * 2))
 pygame.init()
 
 
@@ -147,9 +178,11 @@ class Wall:
 
 walls = [
 	Wall((64, 64), (70, 64), image),
-	Wall((70, 64), (70, 70), image_2),
+	Wall((70, 64), (70, 70), image),
 	Wall((64, 64), (70, 70), image_3)
 ]
+
+
 
 pygame.mouse.set_visible(False)
 pygame.event.set_grab(True)
@@ -172,6 +205,8 @@ while running:
 
 	for wall in walls:
 		pygame.draw.line(screen_surface, (255, 255, 255), wall.start_position, wall.end_position)
+
+	#screen_surface.blit(image, floor)
 
 	player.update()
 	player.render(screen_surface, walls)
