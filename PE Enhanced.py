@@ -42,7 +42,7 @@ def clamp(value, minimum, maximum):
 	return max(minimum, min(value, maximum))
 
 @numba.jit(nopython=True, nogil=True)
-def scan_line(position, angle, fov, view_distance, level, buffer):
+def scan_line(position, angle, fov, view_distance, level, floor, buffer):
 	#Get The Interval Angle To Loop Through Every X-Coordinate Correctly
 	interval_angle = fov / buffer.shape[0]
 	half_height = int(buffer.shape[1] / 2)
@@ -64,18 +64,31 @@ def scan_line(position, angle, fov, view_distance, level, buffer):
 					numpy.power(position[1] - intersection_position[1], 2)) * numpy.cos(translated_angle - numpy.radians(angle))
 
 				if distance != 0:
-					wall_height = numpy.floor(half_height / distance) * (buffer.shape[0] / buffer.shape[1])
+					wall_height = numpy.floor(half_height / distance)
 					
+					#We Do % 1 To Repeat The Texture
 					texture_distance = numpy.sqrt(
 						numpy.power(wall[0][0] - intersection_position[0], 2) +
 						numpy.power(wall[0][1] - intersection_position[1], 2)) % 1
 
-					#print(texture_distance)
-
 					for y in range(clamp(half_height - wall_height, 0, buffer.shape[1]), clamp(half_height + wall_height, 0, buffer.shape[1])):
 						buffer[x, y] = wall[2][int(texture_distance * 64), int((y - (half_height - wall_height)) / wall_height * 32)]
-	#return buffer
 
+					for y in range(clamp(half_height + wall_height, 0, buffer.shape[1]), buffer.shape[1]):
+						floor_distance = buffer.shape[1] / (2 * y - buffer.shape[1])
+						floor_distance /= numpy.cos(translated_angle - numpy.radians(angle))
+
+						translated_floor_point = (
+							position[0] + floor_distance * numpy.cos(translated_angle),
+							position[1] + floor_distance * numpy.sin(translated_angle))
+
+						final_point = (
+							int((translated_floor_point[0] * 32) % 64),
+							int((translated_floor_point[1] * 32) % 64)
+						)
+
+						buffer[x, y] = level[1][2][final_point[0], final_point[1]]
+						buffer[x, buffer.shape[1] - y] = level[1][2][final_point[0], final_point[1]]
 
 pygame.init()
 
@@ -89,7 +102,8 @@ running = True
 buffer = numpy.zeros((screen_surface.get_width(), screen_surface.get_height()), dtype=numpy.int32)
 
 #Create Textures
-basic_wall = pygame.surfarray.array2d(pygame.image.load("texture.png").convert())
+basic_wall_1 = pygame.surfarray.array2d(pygame.image.load("texture.png").convert())
+basic_wall_2 = pygame.surfarray.array2d(pygame.image.load("texture2.png").convert())
 
 #Create Player
 player = Player((68, 66), 60, 128)
@@ -99,10 +113,12 @@ clock = pygame.time.Clock()
 font = pygame.font.SysFont("Monospace" , 24 , bold = False)
 
 level = (
-	((64, 64), (70, 64), basic_wall),
-	((70, 64), (70, 70), basic_wall),
-	((64, 64), (70, 70), basic_wall)
+	((64, 64), (70, 64), basic_wall_1),
+	((70, 64), (70, 70), basic_wall_2),
+	((64, 64), (70, 70), basic_wall_1)
 )
+
+floor = (64, 64, 32, 32)
 
 while running:
 	for event in pygame.event.get():
@@ -120,16 +136,12 @@ while running:
 		player.position[1] + (numpy.sin(numpy.radians(player.angle)) * (keys[pygame.K_w] - keys[pygame.K_s]) * .1)
 	)
 
-	scan_line(player.position, player.angle, player.fov, player.view_distance, level, buffer)
+	scan_line(player.position, player.angle, player.fov, player.view_distance, level, floor, buffer)
 	pygame.surfarray.blit_array(screen_surface, buffer)
-
-	for wall in level:
-		pygame.draw.line(screen_surface, (255, 255, 255), wall[0], wall[1])
-
-	pygame.draw.line(screen_surface, (255, 255, 255), player.position, player.position)
 	screen_surface.blit(font.render("FPS: " + str(clock.get_fps()), False, (255, 255, 255)), (0, 0))
 
-	buffer.fill(0)
+	#This Is Unecessary In Closed Areas
+	#buffer.fill(0)
 	pygame.display.flip()
 
 	clock.tick()

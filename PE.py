@@ -2,7 +2,7 @@ import pygame
 import math
 import numba
 
-SIZE = (256, 256)
+SIZE = (512, 512)
 
 screen_surface = pygame.display.set_mode(SIZE, pygame.SCALED | pygame.FULLSCREEN, vsync=True)
 image = pygame.image.load("texture.png").convert()
@@ -170,7 +170,7 @@ font = pygame.font.SysFont("Monospace" , 24 , bold = False)
 
 player = Player((68, 66), 60, 256)
 
-`ss Wall:
+class Wall:
 	def __init__(self, start_position, end_position, surface):
 		self.start_position = start_position
 		self.end_position = end_position
