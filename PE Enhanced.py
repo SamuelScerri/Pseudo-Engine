@@ -42,7 +42,7 @@ def clamp(value, minimum, maximum):
 	return max(minimum, min(value, maximum))
 
 @numba.jit(nopython=True, nogil=True)
-def scan_line(position, angle, fov, view_distance, level, floor, buffer):
+def scan_line(position, angle, fov, view_distance, level, floor, ceiling, buffer):
 	#Get The Interval Angle To Loop Through Every X-Coordinate Correctly
 	interval_angle = fov / buffer.shape[0]
 	half_height = int(buffer.shape[1] / 2)
@@ -83,11 +83,11 @@ def scan_line(position, angle, fov, view_distance, level, floor, buffer):
 							position[1] + floor_distance * numpy.sin(translated_angle) * (buffer.shape[0] / buffer.shape[1]))
 
 						final_point = (
-							int((translated_floor_point[0] * 32) % 64),
-							int((translated_floor_point[1] * 32) % 64))
+							int((translated_floor_point[0] * 64) % 64),
+							int((translated_floor_point[1] * 64) % 64))
 
-						buffer[x, y] = level[1][2][final_point[0], final_point[1]]
-						buffer[x, buffer.shape[1] - y] = level[1][2][final_point[0], final_point[1]]
+						buffer[x, y] = floor[final_point[0], final_point[1]]
+						buffer[x, buffer.shape[1] - y] = ceiling[final_point[0], final_point[1]]
 
 pygame.init()
 
@@ -103,6 +103,7 @@ buffer = numpy.zeros((screen_surface.get_width(), screen_surface.get_height()), 
 #Create Textures
 basic_wall_1 = pygame.surfarray.array2d(pygame.image.load("texture.png").convert())
 basic_wall_2 = pygame.surfarray.array2d(pygame.image.load("texture2.png").convert())
+basic_wall_3 = pygame.surfarray.array2d(pygame.image.load("texture3.png").convert())
 
 #Create Player
 player = Player((68, 66), 60, 128)
@@ -113,11 +114,12 @@ font = pygame.font.SysFont("Monospace" , 24 , bold = False)
 
 level = (
 	((64, 64), (70, 64), basic_wall_1),
-	((70, 64), (70, 70), basic_wall_2),
+	((70, 64), (70, 70), basic_wall_1),
 	((64, 64), (70, 70), basic_wall_1)
 )
 
-floor = (64, 64, 32, 32)
+floor = basic_wall_2
+ceiling = basic_wall_3
 
 while running:
 	for event in pygame.event.get():
@@ -135,7 +137,7 @@ while running:
 		player.position[1] + (numpy.sin(numpy.radians(player.angle)) * (keys[pygame.K_w] - keys[pygame.K_s]) * .1)
 	)
 
-	scan_line(player.position, player.angle, player.fov, player.view_distance, level, floor, buffer)
+	scan_line(player.position, player.angle, player.fov, player.view_distance, level, floor, ceiling, buffer)
 	pygame.surfarray.blit_array(screen_surface, buffer)
 	screen_surface.blit(font.render("FPS: " + str(clock.get_fps()), False, (255, 255, 255)), (0, 0))
 
