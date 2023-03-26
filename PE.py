@@ -170,7 +170,7 @@ font = pygame.font.SysFont("Monospace" , 24 , bold = False)
 
 player = Player((68, 66), 60, 256)
 
-class Wall:
+`ss Wall:
 	def __init__(self, start_position, end_position, surface):
 		self.start_position = start_position
 		self.end_position = end_position
