@@ -26,13 +26,13 @@ def check_intersection(wall_1, wall_2):
 	denom = (y4-y3)*(x2-x1) - (x4-x3)*(y2-y1)
 
 	if denom == 0:
-		return (0.1, 0.1)
+		return (0, 0)
 	ua = ((x4-x3)*(y1-y3) - (y4-y3)*(x1-x3)) / denom
 	if ua < 0 or ua > 1: # out of range
-		return (0.1, 0.1)
+		return (0, 0)
 	ub = ((x2-x1)*(y1-y3) - (y2-y1)*(x1-x3)) / denom
 	if ub < 0 or ub > 1: # out of range
-		return (0.1, 0.1)
+		return (0, 0)
 	x = x1 + ua * (x2-x1)
 	y = y1 + ua * (y2-y1)
 	return (x,y)	
@@ -57,14 +57,14 @@ def scan_line(position, angle, fov, view_distance, level, floor, buffer):
 		for wall in level:
 			intersection_position = check_intersection(translated_point, wall)
 
-			if intersection_position != (0.1, 0.1):
+			if intersection_position != (0, 0):
 				#print(intersection_position)s
 				distance = numpy.sqrt(
 					numpy.power(position[0] - intersection_position[0], 2) +
 					numpy.power(position[1] - intersection_position[1], 2)) * numpy.cos(translated_angle - numpy.radians(angle))
 
 				if distance != 0:
-					wall_height = numpy.floor(half_height / distance)
+					wall_height = numpy.floor(half_height / distance) * (buffer.shape[0] / buffer.shape[1])
 					
 					#We Do % 1 To Repeat The Texture
 					texture_distance = numpy.sqrt(
@@ -79,13 +79,12 @@ def scan_line(position, angle, fov, view_distance, level, floor, buffer):
 						floor_distance /= numpy.cos(translated_angle - numpy.radians(angle))
 
 						translated_floor_point = (
-							position[0] + floor_distance * numpy.cos(translated_angle),
-							position[1] + floor_distance * numpy.sin(translated_angle))
+							position[0] + floor_distance * numpy.cos(translated_angle) * (buffer.shape[0] / buffer.shape[1]),
+							position[1] + floor_distance * numpy.sin(translated_angle) * (buffer.shape[0] / buffer.shape[1]))
 
 						final_point = (
 							int((translated_floor_point[0] * 32) % 64),
-							int((translated_floor_point[1] * 32) % 64)
-						)
+							int((translated_floor_point[1] * 32) % 64))
 
 						buffer[x, y] = level[1][2][final_point[0], final_point[1]]
 						buffer[x, buffer.shape[1] - y] = level[1][2][final_point[0], final_point[1]]
