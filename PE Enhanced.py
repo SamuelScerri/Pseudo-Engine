@@ -148,7 +148,7 @@ def scan_line(position, angle, fov, view_distance, offset_y, level, floor, ceili
 
 pygame.init()
 
-screen_surface = pygame.display.set_mode((512, 512), pygame.SCALED, vsync=True)
+screen_surface = pygame.display.set_mode((128, 128), pygame.SCALED, vsync=True)
 pygame.mouse.set_visible(False)
 pygame.event.set_grab(True)
 
@@ -181,13 +181,15 @@ ceiling = basic_wall_3
 first_part_wall = None
 second_part_wall = None
 
+dt = 0
+
 while running:
 	for event in pygame.event.get():
 		if event.type == pygame.QUIT:
 			running = False
 
 		if event.type == pygame.MOUSEMOTION:
-			player.angle += event.rel[0] * .05
+			player.angle += event.rel[0] * .25
 
 		if event.type == pygame.MOUSEBUTTONDOWN:
 			if pygame.mouse.get_pressed()[0]:
@@ -206,9 +208,11 @@ while running:
 
 	#Player Movement
 	player.position = (
-		player.position[0] + (numpy.cos(numpy.radians(player.angle)) * (keys[pygame.K_w] - keys[pygame.K_s]) * .1),
-		player.position[1] + (numpy.sin(numpy.radians(player.angle)) * (keys[pygame.K_w] - keys[pygame.K_s]) * .1)
+		player.position[0] + (numpy.cos(numpy.radians(player.angle)) * (keys[pygame.K_w] - keys[pygame.K_s]) * 8 * dt),
+		player.position[1] + (numpy.sin(numpy.radians(player.angle)) * (keys[pygame.K_w] - keys[pygame.K_s]) * 8 * dt)
 	)
+
+	player.angle += (keys[pygame.K_d] - keys[pygame.K_a]) * 64 * dt
 
 	scan_line(player.position, player.angle, player.fov, player.view_distance, player.offset_y, level, floor, ceiling, buffer)
 	pygame.surfarray.blit_array(screen_surface, buffer)
@@ -217,4 +221,4 @@ while running:
 	#This Is Unecessary In Closed Areas
 	pygame.display.flip()
 
-	clock.tick()
+	dt = clock.tick() / 1000
