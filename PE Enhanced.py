@@ -8,14 +8,9 @@ class Player:
 		self.angle = 0
 		self.fov = fov
 		self.view_distance = view_distance
+		self.offset_y = 32
 
-
-class Wall:
-	def __init__(self, start_position, end_position, surface):
-		self.start_position = start_position
-		self.end_position = end_position
-		self.surface = surface
-
+		
 @numba.jit(nopython=True, nogil=True)
 def check_intersection(wall_1, wall_2):
 	x1, y1 = wall_1[0]
@@ -42,7 +37,42 @@ def clamp(value, minimum, maximum):
 	return max(minimum, min(value, maximum))
 
 @numba.jit(nopython=True, nogil=True)
-def scan_line(position, angle, fov, view_distance, level, floor, ceiling, buffer):
+def get_closest_wall(position, translated_angle, angle, translated_point, level):
+	closest_wall = level[0]
+	intersection_position = (0, 0)
+	closest_distance = 0
+
+	initial_request = True
+
+	for wall in level:
+		check_interesection = check_intersection(translated_point, wall)
+
+		if initial_request == True:
+			if check_interesection != (0, 0):
+				closest_distance = numpy.sqrt(
+					numpy.power(position[0] - check_interesection[0], 2) +
+					numpy.power(position[1] - check_interesection[1], 2))
+
+			intersection_position = (check_interesection[0], check_interesection[1])
+			closest_wall = wall
+
+			initial_request = False
+
+		else:
+			if check_interesection != (0, 0):
+				new_distance = numpy.sqrt(
+					numpy.power(position[0] - check_interesection[0], 2) +
+					numpy.power(position[1] - check_interesection[1], 2))
+
+				if new_distance <= closest_distance:
+					closest_distance = new_distance
+					intersection_position = (check_interesection[0], check_interesection[1])
+					closest_wall = wall
+
+	return closest_wall, intersection_position, closest_distance
+
+@numba.jit(nopython=True, nogil=True)
+def scan_line(position, angle, fov, view_distance, offset_y, level, floor, ceiling, buffer):
 	#Get The Interval Angle To Loop Through Every X-Coordinate Correctly
 	interval_angle = fov / buffer.shape[0]
 	half_height = int(buffer.shape[1] / 2)
@@ -54,40 +84,35 @@ def scan_line(position, angle, fov, view_distance, level, floor, ceiling, buffer
 			(position[0], position[1]),
 			(position[0] + view_distance * numpy.cos(translated_angle), position[1] + view_distance * numpy.sin(translated_angle)))
 
-		for wall in level:
-			intersection_position = check_intersection(translated_point, wall)
+		closest_wall, intersection_position, closest_distance = get_closest_wall(position, translated_angle, angle, translated_point, level)
 
-			if intersection_position != (0, 0):
-				#print(intersection_position)s
-				distance = numpy.sqrt(
-					numpy.power(position[0] - intersection_position[0], 2) +
-					numpy.power(position[1] - intersection_position[1], 2)) * numpy.cos(translated_angle - numpy.radians(angle))
+		closest_distance *= numpy.cos(translated_angle - numpy.radians(angle))
 
-				if distance != 0:
-					wall_height = numpy.floor(half_height / distance) * (buffer.shape[0] / buffer.shape[1])
+		if closest_distance != 0 and intersection_position != (0, 0):
+			wall_height = numpy.floor(half_height / closest_distance) * (buffer.shape[0] / buffer.shape[1])
 					
-					#We Do % 1 To Repeat The Texture
-					texture_distance = numpy.sqrt(
-						numpy.power(wall[0][0] - intersection_position[0], 2) +
-						numpy.power(wall[0][1] - intersection_position[1], 2)) % 1
+			#We Do % 1 To Repeat The Texture
+			texture_distance = numpy.sqrt(
+				numpy.power(closest_wall[0][0] - intersection_position[0], 2) +
+				numpy.power(closest_wall[0][1] - intersection_position[1], 2)) % 1
 
-					for y in range(clamp(half_height - wall_height, 0, buffer.shape[1]), clamp(half_height + wall_height, 0, buffer.shape[1])):
-						buffer[x, y] = wall[2][int(texture_distance * 64), int((y - (half_height - wall_height)) / wall_height * 32)]
+			for y in range(clamp(half_height - wall_height, 0, buffer.shape[1]), clamp(half_height + wall_height, 0, buffer.shape[1])):
+				buffer[x, y] = closest_wall[2][int(texture_distance * 64), int((y - (half_height - wall_height)) / wall_height * 32)]
 
-					for y in range(clamp(half_height + wall_height, 0, buffer.shape[1]), buffer.shape[1]):
-						floor_distance = buffer.shape[1] / (2 * y - buffer.shape[1])
-						floor_distance /= numpy.cos(translated_angle - numpy.radians(angle))
+			for y in range(clamp(half_height + wall_height, 0, buffer.shape[1]), buffer.shape[1]):
+				floor_distance = buffer.shape[1] / (2 * y - buffer.shape[1])
+				floor_distance /= numpy.cos(translated_angle - numpy.radians(angle))
 
-						translated_floor_point = (
-							position[0] + floor_distance * numpy.cos(translated_angle) * (buffer.shape[0] / buffer.shape[1]),
-							position[1] + floor_distance * numpy.sin(translated_angle) * (buffer.shape[0] / buffer.shape[1]))
+				translated_floor_point = (
+					position[0] + floor_distance * numpy.cos(translated_angle) * (buffer.shape[0] / buffer.shape[1]),
+					position[1] + floor_distance * numpy.sin(translated_angle) * (buffer.shape[0] / buffer.shape[1]))
 
-						final_point = (
-							int((translated_floor_point[0] * 64) % 64),
-							int((translated_floor_point[1] * 64) % 64))
+				final_point = (
+					int((translated_floor_point[0] * 64) % 64),
+					int((translated_floor_point[1] * 64) % 64))
 
-						buffer[x, y] = floor[final_point[0], final_point[1]]
-						buffer[x, buffer.shape[1] - y] = ceiling[final_point[0], final_point[1]]
+				buffer[x, y] = floor[final_point[0], final_point[1]]
+				buffer[x, buffer.shape[1] - y] = ceiling[final_point[0], final_point[1]]
 
 pygame.init()
 
@@ -112,14 +137,17 @@ player = Player((68, 66), 60, 128)
 clock = pygame.time.Clock()
 font = pygame.font.SysFont("Monospace" , 24 , bold = False)
 
-level = (
+level = [
 	((64, 64), (70, 64), basic_wall_1),
 	((70, 64), (70, 70), basic_wall_1),
 	((64, 64), (70, 70), basic_wall_1)
-)
+]
 
 floor = basic_wall_2
 ceiling = basic_wall_3
+
+first_part_wall = None
+second_part_wall = None
 
 while running:
 	for event in pygame.event.get():
@@ -129,6 +157,19 @@ while running:
 		if event.type == pygame.MOUSEMOTION:
 			player.angle += event.rel[0] * .05
 
+		if event.type == pygame.MOUSEBUTTONDOWN:
+			if pygame.mouse.get_pressed()[0]:
+				if first_part_wall == None:
+					first_part_wall = (int(player.position[0]), int(int(player.position[1])))
+				else:
+					second_part_wall = (int(player.position[0]), int(int(player.position[1])))
+					new_wall = first_part_wall, second_part_wall, basic_wall_1
+
+					level.append(new_wall)
+
+					first_part_wall = None
+					second_part_wall = None
+
 	keys = pygame.key.get_pressed()
 
 	#Player Movement
@@ -137,12 +178,12 @@ while running:
 		player.position[1] + (numpy.sin(numpy.radians(player.angle)) * (keys[pygame.K_w] - keys[pygame.K_s]) * .1)
 	)
 
-	scan_line(player.position, player.angle, player.fov, player.view_distance, level, floor, ceiling, buffer)
+	scan_line(player.position, player.angle, player.fov, player.view_distance, player.offset_y, level, floor, ceiling, buffer)
 	pygame.surfarray.blit_array(screen_surface, buffer)
 	screen_surface.blit(font.render("FPS: " + str(clock.get_fps()), False, (255, 255, 255)), (0, 0))
 
 	#This Is Unecessary In Closed Areas
-	#buffer.fill(0)
+	buffer.fill(0)
 	pygame.display.flip()
 
 	clock.tick()
