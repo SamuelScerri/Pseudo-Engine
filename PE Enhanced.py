@@ -11,7 +11,7 @@ class Player:
 		self.offset_y = 32
 
 		
-@numba.jit(nopython=True, nogil=True)
+@numba.jit(nopython=True, nogil=True, cache=True, fastmath=True)
 def check_intersection(wall_1, wall_2):
 	x1, y1 = wall_1[0]
 	x2, y2 = wall_1[1]
@@ -32,11 +32,11 @@ def check_intersection(wall_1, wall_2):
 	y = y1 + ua * (y2-y1)
 	return (x,y)	
 
-@numba.jit(nopython=True, nogil=True)
+@numba.jit(nopython=True, nogil=True, cache=True, fastmath=True)
 def clamp(value, minimum, maximum):
 	return max(minimum, min(value, maximum))
 
-@numba.jit(nopython=True, nogil=True)
+@numba.jit(nopython=True, nogil=True, cache=True, fastmath=True)
 def get_closest_wall(position, translated_angle, angle, translated_point, level):
 	closest_wall = level[1]
 	intersection_position = (0, 0)
@@ -45,36 +45,36 @@ def get_closest_wall(position, translated_angle, angle, translated_point, level)
 	initial_request = True
 
 	for wall in level:
-		check_interesection = check_intersection(translated_point, wall)
+		checked_intersection = check_intersection(translated_point, wall)
 
-		if check_interesection != (0, 0):
+		if checked_intersection != (0, 0):
 			if initial_request is True:
 				closest_distance = numpy.sqrt(
-					numpy.power(position[0] - check_interesection[0], 2) +
-					numpy.power(position[1] - check_interesection[1], 2))
+					numpy.power(position[0] - checked_intersection[0], 2) +
+					numpy.power(position[1] - checked_intersection[1], 2))
 
-				intersection_position = (check_interesection[0], check_interesection[1])
+				intersection_position = checked_intersection
 				closest_wall = wall
 
 				initial_request = False
 
 			else:
 				new_distance = numpy.sqrt(
-					numpy.power(position[0] - check_interesection[0], 2) +
-					numpy.power(position[1] - check_interesection[1], 2))
+					numpy.power(position[0] - checked_intersection[0], 2) +
+					numpy.power(position[1] - checked_intersection[1], 2))
 
 				if new_distance <= closest_distance:
 					closest_distance = new_distance
-					intersection_position = (check_interesection[0], check_interesection[1])
+					intersection_position = checked_intersection
 					closest_wall = wall
 
 	return closest_wall, intersection_position, closest_distance
 
-@numba.jit(nopython=True, nogil=True)
+@numba.jit(nopython=True, nogil=True, cache=True, fastmath=True)
 def lerp(a, b, t):
 	return a + (b - a) * t
 
-@numba.jit(nopython=True, nogil=True)
+@numba.jit(nopython=True, nogil=True, cache=True)
 def mix(rgb_1, rgb_2):
 	mixed_r = int(rgb_1[0] * rgb_2[0]) << 16
 	mixed_g = int(rgb_1[1] * rgb_2[1]) << 8
@@ -82,7 +82,7 @@ def mix(rgb_1, rgb_2):
 
 	return mixed_r + mixed_g + mixed_b
 
-@numba.jit(nopython=True, nogil=True)
+@numba.jit(nopython=True, nogil=True, cache=True, fastmath=True)
 def convert_int_rgb(code):
 	converted_r = (code >> 16) & 0xff
 	converted_g = (code >> 8) & 0xff
@@ -90,7 +90,7 @@ def convert_int_rgb(code):
 
 	return converted_r, converted_g, converted_b
 
-@numba.jit(nopython=True, nogil=True)
+@numba.jit(nopython=True, nogil=True, cache=True, fastmath=True)
 def scan_line(position, angle, fov, view_distance, offset_y, level, floor, ceiling, buffer):
 	#Get The Interval Angle To Loop Through Every X-Coordinate Correctly
 	interval_angle = fov / buffer.shape[0]
@@ -120,8 +120,6 @@ def scan_line(position, angle, fov, view_distance, offset_y, level, floor, ceili
 			#Wall Casting Code
 			for y in range(clamp(half_height - wall_height, 0, buffer.shape[1]), clamp(half_height + wall_height, 0, buffer.shape[1])):
 				texture_rgb = convert_int_rgb(closest_wall[2][int(texture_distance * 64), int((y - (half_height - wall_height)) / wall_height * 32)])
-
-
 				buffer[x, y] = mix(texture_rgb, (darkness, darkness, darkness))
 
 
@@ -167,13 +165,14 @@ player = Player((68, 66), 60, 128)
 
 #Create Frame Counter
 clock = pygame.time.Clock()
-font = pygame.font.SysFont("Monospace" , 24 , bold = False)
+font = pygame.font.SysFont("Monospace" , 16 , bold = False)
 
-level = [
+
+level = (
 	((64, 64), (70, 64), basic_wall_1),
 	((70, 64), (70, 70), basic_wall_1),
 	((64, 64), (70, 70), basic_wall_1)
-]
+)
 
 floor = basic_wall_2
 ceiling = basic_wall_3
@@ -184,6 +183,8 @@ second_part_wall = None
 dt = 0
 
 while running:
+	keys = pygame.key.get_pressed()
+
 	for event in pygame.event.get():
 		if event.type == pygame.QUIT:
 			running = False
@@ -191,20 +192,27 @@ while running:
 		if event.type == pygame.MOUSEMOTION:
 			player.angle += event.rel[0] * .25
 
-		if event.type == pygame.MOUSEBUTTONDOWN:
-			if pygame.mouse.get_pressed()[0]:
-				if first_part_wall == None:
-					first_part_wall = (int(player.position[0]), int(int(player.position[1])))
-				else:
-					second_part_wall = (int(player.position[0]), int(int(player.position[1])))
-					new_wall = first_part_wall, second_part_wall, basic_wall_1
 
-					level.append(new_wall)
+		if event.type == pygame.KEYDOWN:
+			down_keys = pygame.key.get_pressed()
+			if down_keys[pygame.K_DOWN] or down_keys[pygame.K_UP]:
+				player.fov += (down_keys[pygame.K_UP] - down_keys[pygame.K_DOWN])
+				print("Changing FOV To:", player.fov)
 
-					first_part_wall = None
-					second_part_wall = None
+		#if event.type == pygame.MOUSEBUTTONDOWN:
+		#	if pygame.mouse.get_pressed()[0]:
+		#		if first_part_wall == None:
+		#			first_part_wall = (int(player.position[0]), int(int(player.position[1])))
+		#		else:
+		#			second_part_wall = (int(player.position[0]), int(int(player.position[1])))
+		#			new_wall = first_part_wall, second_part_wall, basic_wall_1
+		#
+		#			level.append(new_wall)
+		#
+		#			first_part_wall = None
+		#			second_part_wall = None
 
-	keys = pygame.key.get_pressed()
+	
 
 	#Player Movement
 	player.position = (
@@ -212,11 +220,11 @@ while running:
 		player.position[1] + (numpy.sin(numpy.radians(player.angle)) * (keys[pygame.K_w] - keys[pygame.K_s]) * 8 * dt)
 	)
 
-	player.angle += (keys[pygame.K_d] - keys[pygame.K_a]) * 64 * dt
+	player.angle += (keys[pygame.K_d] - keys[pygame.K_a]) * 128 * dt
 
 	scan_line(player.position, player.angle, player.fov, player.view_distance, player.offset_y, level, floor, ceiling, buffer)
 	pygame.surfarray.blit_array(screen_surface, buffer)
-	screen_surface.blit(font.render("FPS: " + str(clock.get_fps()), False, (255, 255, 255)), (0, 0))
+	screen_surface.blit(font.render("FPS: " + str(int(clock.get_fps())), False, (255, 255, 255)), (0, 0))
 
 	#This Is Unecessary In Closed Areas
 	pygame.display.flip()

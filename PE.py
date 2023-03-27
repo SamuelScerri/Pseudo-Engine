@@ -4,7 +4,7 @@ import numba
 
 SIZE = (512, 512)
 
-screen_surface = pygame.display.set_mode(SIZE, pygame.SCALED | pygame.FULLSCREEN, vsync=True)
+screen_surface = pygame.display.set_mode(SIZE, pygame.SCALED, vsync=True)
 image = pygame.image.load("texture.png").convert()
 image_2 = pygame.image.load("texture2.png").convert()
 image_3 = pygame.image.load("texture3.png").convert()
