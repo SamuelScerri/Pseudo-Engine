@@ -71,6 +71,26 @@ def get_closest_wall(position, translated_angle, angle, translated_point, level)
 	return closest_wall, intersection_position, closest_distance
 
 @numba.jit(nopython=True, nogil=True)
+def lerp(a, b, t):
+	return a + (b - a) * t
+
+@numba.jit(nopython=True, nogil=True)
+def mix(rgb_1, rgb_2):
+	mixed_r = int(rgb_1[0] * rgb_2[0]) << 16
+	mixed_g = int(rgb_1[1] * rgb_2[1]) << 8
+	mixed_b = int(rgb_1[2] * rgb_2[2])
+
+	return mixed_r + mixed_g + mixed_b
+
+@numba.jit(nopython=True, nogil=True)
+def convert_int_rgb(code):
+	converted_r = (code >> 16) & 0xff
+	converted_g = (code >> 8) & 0xff
+	converted_b = code & 0xff
+
+	return converted_r, converted_g, converted_b
+
+@numba.jit(nopython=True, nogil=True)
 def scan_line(position, angle, fov, view_distance, offset_y, level, floor, ceiling, buffer):
 	#Get The Interval Angle To Loop Through Every X-Coordinate Correctly
 	interval_angle = fov / buffer.shape[0]
@@ -95,12 +115,22 @@ def scan_line(position, angle, fov, view_distance, offset_y, level, floor, ceili
 				numpy.power(closest_wall[0][0] - intersection_position[0], 2) +
 				numpy.power(closest_wall[0][1] - intersection_position[1], 2)) % 1
 
-			for y in range(clamp(half_height - wall_height, 0, buffer.shape[1]), clamp(half_height + wall_height, 0, buffer.shape[1])):
-				buffer[x, y] = closest_wall[2][int(texture_distance * 64), int((y - (half_height - wall_height)) / wall_height * 32)]
+			darkness = clamp(lerp(0, .5, 1 / closest_distance), 0, 1)
 
+			#Wall Casting Code
+			for y in range(clamp(half_height - wall_height, 0, buffer.shape[1]), clamp(half_height + wall_height, 0, buffer.shape[1])):
+				texture_rgb = convert_int_rgb(closest_wall[2][int(texture_distance * 64), int((y - (half_height - wall_height)) / wall_height * 32)])
+
+
+				buffer[x, y] = mix(texture_rgb, (darkness, darkness, darkness))
+
+
+			#Floor Casting Code
 			for y in range(clamp(half_height + wall_height, 0, buffer.shape[1]), buffer.shape[1]):
 				floor_distance = buffer.shape[1] / (2 * y - buffer.shape[1])
 				floor_distance /= numpy.cos(translated_angle - numpy.radians(angle))
+
+				darkness = clamp(lerp(0, .5, 1 / floor_distance), 0, 1)
 
 				translated_floor_point = (
 					position[0] + floor_distance * numpy.cos(translated_angle) * (buffer.shape[0] / buffer.shape[1]),
@@ -110,8 +140,11 @@ def scan_line(position, angle, fov, view_distance, offset_y, level, floor, ceili
 					int((translated_floor_point[0] * 64) % 64),
 					int((translated_floor_point[1] * 64) % 64))
 
-				buffer[x, y] = floor[final_point[0], final_point[1]]
-				buffer[x, buffer.shape[1] - y] = ceiling[final_point[0], final_point[1]]
+				floor_rgb = convert_int_rgb(floor[final_point[0], final_point[1]])
+				ceiling_rgb = convert_int_rgb(ceiling[final_point[0], final_point[1]])
+
+				buffer[x, y] = mix(floor_rgb, (darkness, darkness, darkness))
+				buffer[x, buffer.shape[1] - y] = mix(ceiling_rgb, (darkness, darkness, darkness))
 
 pygame.init()
 
