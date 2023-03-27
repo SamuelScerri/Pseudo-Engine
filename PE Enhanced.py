@@ -38,7 +38,7 @@ def clamp(value, minimum, maximum):
 
 @numba.jit(nopython=True, nogil=True)
 def get_closest_wall(position, translated_angle, angle, translated_point, level):
-	closest_wall = level[0]
+	closest_wall = level[1]
 	intersection_position = (0, 0)
 	closest_distance = 0
 
@@ -47,19 +47,18 @@ def get_closest_wall(position, translated_angle, angle, translated_point, level)
 	for wall in level:
 		check_interesection = check_intersection(translated_point, wall)
 
-		if initial_request == True:
-			if check_interesection != (0, 0):
+		if check_interesection != (0, 0):
+			if initial_request is True:
 				closest_distance = numpy.sqrt(
 					numpy.power(position[0] - check_interesection[0], 2) +
 					numpy.power(position[1] - check_interesection[1], 2))
 
-			intersection_position = (check_interesection[0], check_interesection[1])
-			closest_wall = wall
+				intersection_position = (check_interesection[0], check_interesection[1])
+				closest_wall = wall
 
-			initial_request = False
+				initial_request = False
 
-		else:
-			if check_interesection != (0, 0):
+			else:
 				new_distance = numpy.sqrt(
 					numpy.power(position[0] - check_interesection[0], 2) +
 					numpy.power(position[1] - check_interesection[1], 2))
@@ -88,7 +87,7 @@ def scan_line(position, angle, fov, view_distance, offset_y, level, floor, ceili
 
 		closest_distance *= numpy.cos(translated_angle - numpy.radians(angle))
 
-		if closest_distance != 0 and intersection_position != (0, 0):
+		if closest_distance != 0 or intersection_position != (0, 0):
 			wall_height = numpy.floor(half_height / closest_distance) * (buffer.shape[0] / buffer.shape[1])
 					
 			#We Do % 1 To Repeat The Texture
@@ -116,7 +115,7 @@ def scan_line(position, angle, fov, view_distance, offset_y, level, floor, ceili
 
 pygame.init()
 
-screen_surface = pygame.display.set_mode((512, 512), pygame.SCALED | pygame.FULLSCREEN, vsync=True)
+screen_surface = pygame.display.set_mode((512, 512), pygame.SCALED, vsync=True)
 pygame.mouse.set_visible(False)
 pygame.event.set_grab(True)
 
@@ -183,7 +182,6 @@ while running:
 	screen_surface.blit(font.render("FPS: " + str(clock.get_fps()), False, (255, 255, 255)), (0, 0))
 
 	#This Is Unecessary In Closed Areas
-	buffer.fill(0)
 	pygame.display.flip()
 
 	clock.tick()
