@@ -74,7 +74,7 @@ def get_closest_wall(position, translated_angle, angle, translated_point, level)
 def lerp(a, b, t):
 	return a + (b - a) * t
 
-@numba.jit(nopython=True, nogil=True, cache=True)
+@numba.jit(nopython=True, nogil=True, cache=True, fastmath=True)
 def mix(rgb_1, rgb_2):
 	mixed_r = int(rgb_1[0] * rgb_2[0]) << 16
 	mixed_g = int(rgb_1[1] * rgb_2[1]) << 8
@@ -146,7 +146,7 @@ def scan_line(position, angle, fov, view_distance, offset_y, level, floor, ceili
 
 pygame.init()
 
-screen_surface = pygame.display.set_mode((128, 128), pygame.SCALED, vsync=True)
+screen_surface = pygame.display.set_mode((128, 128), pygame.SCALED, vsync=False)
 pygame.mouse.set_visible(False)
 pygame.event.set_grab(True)
 
