@@ -2,7 +2,7 @@ import pygame
 import math
 import numba
 
-SIZE = (512, 512)
+SIZE = (256, 256)
 
 screen_surface = pygame.display.set_mode(SIZE, pygame.SCALED, vsync=True)
 image = pygame.image.load("texture.png").convert()

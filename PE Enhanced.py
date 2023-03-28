@@ -70,9 +70,32 @@ def get_closest_wall(position, translated_angle, angle, translated_point, level)
 
 	return closest_wall, intersection_position, closest_distance
 
+
+@numba.jit(nopython=True, nogil=True, cache=True, fastmath=True)
+def normalize(direction):
+	magnitude = numpy.sqrt(direction[0] * direction[0] + direction[1] * direction[1])
+	if magnitude > 0:
+		return direction[0] / magnitude, direction[1] / magnitude
+
+	return (0, 0)
+
+
+@numba.jit(nopython=True, nogil=True, cache=True, fastmath=True)
+def collision_check(old_position, new_position, velocity, level):
+	for wall in level:
+		move_difference_segment = ((old_position[0], old_position[1]), (new_position[0], new_position[1]))
+		checked_intersection = check_intersection(move_difference_segment, wall)
+
+		if checked_intersection != (0, 0):
+			return old_position
+
+	return new_position
+
+
 @numba.jit(nopython=True, nogil=True, cache=True, fastmath=True)
 def lerp(a, b, t):
 	return a + (b - a) * t
+
 
 @numba.jit(nopython=True, nogil=True, cache=True, fastmath=True)
 def mix(rgb_1, rgb_2):
@@ -82,6 +105,7 @@ def mix(rgb_1, rgb_2):
 
 	return mixed_r + mixed_g + mixed_b
 
+
 @numba.jit(nopython=True, nogil=True, cache=True, fastmath=True)
 def convert_int_rgb(code):
 	converted_r = (code >> 16) & 0xff
@@ -89,6 +113,7 @@ def convert_int_rgb(code):
 	converted_b = code & 0xff
 
 	return converted_r, converted_g, converted_b
+
 
 @numba.jit(nopython=True, nogil=True, cache=True, fastmath=True)
 def scan_line(position, angle, fov, view_distance, offset_y, level, floor, ceiling, buffer):
@@ -107,7 +132,7 @@ def scan_line(position, angle, fov, view_distance, offset_y, level, floor, ceili
 
 		closest_distance *= numpy.cos(translated_angle - numpy.radians(angle))
 
-		if closest_distance != 0 or intersection_position != (0, 0):
+		if closest_distance != 0:
 			wall_height = numpy.floor(half_height / closest_distance) * (buffer.shape[0] / buffer.shape[1])
 					
 			#We Do % 1 To Repeat The Texture
@@ -146,7 +171,7 @@ def scan_line(position, angle, fov, view_distance, offset_y, level, floor, ceili
 
 pygame.init()
 
-screen_surface = pygame.display.set_mode((128, 128), pygame.SCALED, vsync=False)
+screen_surface = pygame.display.set_mode((128, 128), pygame.SCALED | pygame.FULLSCREEN, vsync=True)
 pygame.mouse.set_visible(False)
 pygame.event.set_grab(True)
 
@@ -190,7 +215,7 @@ while running:
 			running = False
 
 		if event.type == pygame.MOUSEMOTION:
-			player.angle += event.rel[0] * .25
+			player.angle += event.rel[0] * .2
 
 
 		if event.type == pygame.KEYDOWN:
@@ -199,30 +224,30 @@ while running:
 				player.fov += (down_keys[pygame.K_UP] - down_keys[pygame.K_DOWN])
 				print("Changing FOV To:", player.fov)
 
-		#if event.type == pygame.MOUSEBUTTONDOWN:
-		#	if pygame.mouse.get_pressed()[0]:
-		#		if first_part_wall == None:
-		#			first_part_wall = (int(player.position[0]), int(int(player.position[1])))
-		#		else:
-		#			second_part_wall = (int(player.position[0]), int(int(player.position[1])))
-		#			new_wall = first_part_wall, second_part_wall, basic_wall_1
-		#
-		#			level.append(new_wall)
-		#
-		#			first_part_wall = None
-		#			second_part_wall = None
-
-	
+		if event.type == pygame.MOUSEBUTTONDOWN:
+			if pygame.mouse.get_pressed()[0]:
+				if first_part_wall == None:
+					first_part_wall = (int(player.position[0]), int(int(player.position[1])))
+				else:
+					second_part_wall = (int(player.position[0]), int(int(player.position[1])))
+					new_wall = first_part_wall, second_part_wall, basic_wall_1
+		
+					level.append(new_wall)
+		
+					first_part_wall = None
+					second_part_wall = None
 
 	#Player Movement
-	player.position = (
+	move_position = (
 		player.position[0] + (numpy.cos(numpy.radians(player.angle)) * (keys[pygame.K_w] - keys[pygame.K_s]) * 8 * dt),
 		player.position[1] + (numpy.sin(numpy.radians(player.angle)) * (keys[pygame.K_w] - keys[pygame.K_s]) * 8 * dt)
 	)
 
 	player.angle += (keys[pygame.K_d] - keys[pygame.K_a]) * 128 * dt
 
+	player.position = collision_check(player.position, move_position, 8 * dt, level)
 	scan_line(player.position, player.angle, player.fov, player.view_distance, player.offset_y, level, floor, ceiling, buffer)
+
 	pygame.surfarray.blit_array(screen_surface, buffer)
 	screen_surface.blit(font.render("FPS: " + str(int(clock.get_fps())), False, (255, 255, 255)), (0, 0))
 
