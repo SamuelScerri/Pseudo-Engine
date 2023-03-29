@@ -11,7 +11,7 @@ class Player:
 		self.offset_y = 32
 
 		
-@numba.jit(nopython=True, nogil=True, cache=True, fastmath=True)
+@numba.jit(nopython=True, nogil=True, cache=False, fastmath=True)
 def check_intersection(wall_1, wall_2):
 	x1, y1 = wall_1[0]
 	x2, y2 = wall_1[1]
@@ -32,11 +32,12 @@ def check_intersection(wall_1, wall_2):
 	y = y1 + ua * (y2-y1)
 	return (x,y)	
 
-@numba.jit(nopython=True, nogil=True, cache=True, fastmath=True)
+@numba.jit(nopython=True, nogil=True, cache=False, fastmath=True)
 def clamp(value, minimum, maximum):
 	return max(minimum, min(value, maximum))
 
-@numba.jit(nopython=True, nogil=True, cache=True, fastmath=True)
+
+@numba.jit(nopython=True, nogil=True, cache=False, fastmath=True)
 def get_closest_wall(position, translated_angle, angle, translated_point, level):
 	closest_wall = level[1]
 	intersection_position = (0, 0)
@@ -44,34 +45,22 @@ def get_closest_wall(position, translated_angle, angle, translated_point, level)
 
 	initial_request = True
 
+	all_walls_intersected = []
+
 	for wall in level:
 		checked_intersection = check_intersection(translated_point, wall)
 
 		if checked_intersection != (0, 0):
-			if initial_request is True:
-				closest_distance = numpy.sqrt(
-					numpy.power(position[0] - checked_intersection[0], 2) +
-					numpy.power(position[1] - checked_intersection[1], 2))
+			closest_distance = numpy.sqrt(
+				numpy.power(position[0] - checked_intersection[0], 2) +
+				numpy.power(position[1] - checked_intersection[1], 2))
 
-				intersection_position = checked_intersection
-				closest_wall = wall
+			all_walls_intersected.append((closest_distance, checked_intersection, wall))
 
-				initial_request = False
-
-			else:
-				new_distance = numpy.sqrt(
-					numpy.power(position[0] - checked_intersection[0], 2) +
-					numpy.power(position[1] - checked_intersection[1], 2))
-
-				if new_distance <= closest_distance:
-					closest_distance = new_distance
-					intersection_position = checked_intersection
-					closest_wall = wall
-
-	return closest_wall, intersection_position, closest_distance
+	return sorted(all_walls_intersected, key=lambda tup: tup[0])
 
 
-@numba.jit(nopython=True, nogil=True, cache=True, fastmath=True)
+@numba.jit(nopython=True, nogil=True, cache=False, fastmath=True)
 def normalize(direction):
 	magnitude = numpy.sqrt(direction[0] * direction[0] + direction[1] * direction[1])
 	if magnitude > 0:
@@ -80,7 +69,7 @@ def normalize(direction):
 	return (0, 0)
 
 
-@numba.jit(nopython=True, nogil=True, cache=True, fastmath=True)
+@numba.jit(nopython=True, nogil=True, cache=False, fastmath=True)
 def collision_check(old_position, new_position, velocity, level):
 	for wall in level:
 		move_difference_segment = ((old_position[0], old_position[1]), (new_position[0], new_position[1]))
@@ -92,12 +81,12 @@ def collision_check(old_position, new_position, velocity, level):
 	return new_position
 
 
-@numba.jit(nopython=True, nogil=True, cache=True, fastmath=True)
+@numba.jit(nopython=True, nogil=True, cache=False, fastmath=True)
 def lerp(a, b, t):
 	return a + (b - a) * t
 
 
-@numba.jit(nopython=True, nogil=True, cache=True, fastmath=True)
+@numba.jit(nopython=True, nogil=True, cache=False, fastmath=True)
 def mix(rgb_1, rgb_2):
 	mixed_r = int(rgb_1[0] * rgb_2[0]) << 16
 	mixed_g = int(rgb_1[1] * rgb_2[1]) << 8
@@ -106,7 +95,7 @@ def mix(rgb_1, rgb_2):
 	return mixed_r + mixed_g + mixed_b
 
 
-@numba.jit(nopython=True, nogil=True, cache=True, fastmath=True)
+@numba.jit(nopython=True, nogil=True, cache=False, fastmath=True)
 def convert_int_rgb(code):
 	converted_r = (code >> 16) & 0xff
 	converted_g = (code >> 8) & 0xff
@@ -115,7 +104,7 @@ def convert_int_rgb(code):
 	return converted_r, converted_g, converted_b
 
 
-@numba.jit(nopython=True, nogil=True, cache=True, fastmath=True)
+@numba.jit(nopython=True, nogil=True, cache=False, fastmath=True)
 def scan_line(position, angle, fov, view_distance, offset_y, level, floor, ceiling, buffer):
 	#Get The Interval Angle To Loop Through Every X-Coordinate Correctly
 	interval_angle = fov / buffer.shape[0]
@@ -128,50 +117,115 @@ def scan_line(position, angle, fov, view_distance, offset_y, level, floor, ceili
 			(position[0], position[1]),
 			(position[0] + view_distance * numpy.cos(translated_angle), position[1] + view_distance * numpy.sin(translated_angle)))
 
-		closest_wall, intersection_position, closest_distance = get_closest_wall(position, translated_angle, angle, translated_point, level)
+		intersected_walls = get_closest_wall(position, translated_angle, angle, translated_point, level)
 
-		closest_distance *= numpy.cos(translated_angle - numpy.radians(angle))
+		previous_top_wall_height = -0.1
 
-		if closest_distance != 0:
-			wall_height = numpy.floor(half_height / closest_distance) * (buffer.shape[0] / buffer.shape[1])
+		for wall in intersected_walls:
+			distance = wall[0] * numpy.cos(translated_angle - numpy.radians(angle))
+			intersection_position = wall[1]
+			wall_reference = wall[2]
+
+
+			if distance != 0:
+				wall_height = numpy.floor(half_height / distance) * (buffer.shape[0] / buffer.shape[1])
+
+				texture_distance = numpy.sqrt(
+					numpy.power(wall_reference[0][0] - intersection_position[0], 2) +
+					numpy.power(wall_reference[0][1] - intersection_position[1], 2)) % 1
+
+				darkness = clamp(lerp(0, .5, 1 / distance), 0, 1)
+
+				bottom_height = half_height + wall_height
+				top_height = (half_height + wall_height) - 2 * wall_height * wall_reference[3]
+
+				if previous_top_wall_height != -0.1:
+					bottom_height = clamp(bottom_height, 0, previous_top_wall_height)
+					top_height = clamp(top_height, 0, previous_top_wall_height)
+
+				#Wall Casting
+				for y in range(clamp(top_height, 0, buffer.shape[1]), clamp(bottom_height, 0, buffer.shape[1])):
+					texture_rgb = convert_int_rgb(wall_reference[2][int(texture_distance * 64), int((y - (half_height - wall_height)) / wall_height * 32)])
+					buffer[x, y] = mix(texture_rgb, (darkness, darkness, darkness))
+
+				floor_range = buffer.shape[1]
+
+				if previous_top_wall_height != -0.1:
+					floor_range = clamp(floor_range, 0, previous_top_wall_height)
+
+				#Floor Casting
+				for y in range(clamp(bottom_height, 0, buffer.shape[1]), floor_range):
+					floor_distance = buffer.shape[1] / (2 * y - buffer.shape[1])
+					floor_distance /= numpy.cos(translated_angle - numpy.radians(angle))
+
+					darkness = clamp(lerp(0, .5, 1 / floor_distance), 0, 1)
+
+					translated_floor_point = (
+						position[0] + floor_distance * numpy.cos(translated_angle) * (buffer.shape[0] / buffer.shape[1]),
+						position[1] + floor_distance * numpy.sin(translated_angle) * (buffer.shape[0] / buffer.shape[1]))
+
+					final_point = (
+						int((translated_floor_point[0] * 64) % 64),
+						int((translated_floor_point[1] * 64) % 64))
+
+					floor_rgb = convert_int_rgb(floor[final_point[0], final_point[1]])
+					ceiling_rgb = convert_int_rgb(ceiling[final_point[0], final_point[1]])
+
+					buffer[x, y] = mix(floor_rgb, (darkness, darkness, darkness))
+					#buffer[x, buffer.shape[1] - y] = mix(ceiling_rgb, (darkness, darkness, darkness))					
+
+				#Ceiling Casting
+
+				#ceiling_range = 0
+				#for y in range(clamp(0, 0, buffer.shape[1]), top_height):
+				#	floor_distance = buffer.shape[1] / (2 * y - buffer.shape[1])
+				#	floor_distance /= numpy.cos(translated_angle - numpy.radians(angle))
+
+				#	darkness = clamp(lerp(0, .5, 1 / floor_distance), 0, 1)
+
+				#	translated_floor_point = (
+				#		position[0] + floor_distance * numpy.cos(translated_angle) * (buffer.shape[0] / buffer.shape[1]),
+				#		position[1] + floor_distance * numpy.sin(translated_angle) * (buffer.shape[0] / buffer.shape[1]))
+
+				#	final_point = (
+				#		int((translated_floor_point[0] * 64) % 64),
+				#		int((translated_floor_point[1] * 64) % 64))
+
+				#	floor_rgb = convert_int_rgb(floor[final_point[0], final_point[1]])
+				#	ceiling_rgb = convert_int_rgb(ceiling[final_point[0], final_point[1]])
+
+				#	buffer[x, y] = mix(floor_rgb, (darkness, darkness, darkness))
+
+
+				previous_top_wall_height = top_height
+
+		#closest_distance *= numpy.cos(translated_angle - numpy.radians(angle))
+
+		#if closest_distance != 0:
+		#	wall_height = numpy.floor(half_height / closest_distance) * (buffer.shape[0] / buffer.shape[1])
 					
 			#We Do % 1 To Repeat The Texture
-			texture_distance = numpy.sqrt(
-				numpy.power(closest_wall[0][0] - intersection_position[0], 2) +
-				numpy.power(closest_wall[0][1] - intersection_position[1], 2)) % 1
+		#	texture_distance = numpy.sqrt(
+		#		numpy.power(closest_wall[0][0] - intersection_position[0], 2) +
+		#		numpy.power(closest_wall[0][1] - intersection_position[1], 2)) % 1
 
-			darkness = clamp(lerp(0, .5, 1 / closest_distance), 0, 1)
+		#	darkness = clamp(lerp(0, .5, 1 / closest_distance), 0, 1)
+
+		#	top_height = (half_height + wall_height) - 2 * wall_height * closest_wall[3]
 
 			#Wall Casting Code
-			for y in range(clamp(half_height - wall_height, 0, buffer.shape[1]), clamp(half_height + wall_height, 0, buffer.shape[1])):
-				texture_rgb = convert_int_rgb(closest_wall[2][int(texture_distance * 64), int((y - (half_height - wall_height)) / wall_height * 32)])
-				buffer[x, y] = mix(texture_rgb, (darkness, darkness, darkness))
+		#	for y in range(clamp(top_height, 0, buffer.shape[1]), clamp(half_height + wall_height, 0, buffer.shape[1])):
+		#		texture_rgb = convert_int_rgb(closest_wall[2][int(texture_distance * 64), int((y - (half_height - wall_height)) / wall_height * 32)])
+		#		buffer[x, y] = mix(texture_rgb, (darkness, darkness, darkness))
 
 
 			#Floor Casting Code
-			for y in range(clamp(half_height + wall_height, 0, buffer.shape[1]), buffer.shape[1]):
-				floor_distance = buffer.shape[1] / (2 * y - buffer.shape[1])
-				floor_distance /= numpy.cos(translated_angle - numpy.radians(angle))
+		#	for y in range(clamp(half_height + wall_height, 0, buffer.shape[1]), buffer.shape[1]):
 
-				darkness = clamp(lerp(0, .5, 1 / floor_distance), 0, 1)
-
-				translated_floor_point = (
-					position[0] + floor_distance * numpy.cos(translated_angle) * (buffer.shape[0] / buffer.shape[1]),
-					position[1] + floor_distance * numpy.sin(translated_angle) * (buffer.shape[0] / buffer.shape[1]))
-
-				final_point = (
-					int((translated_floor_point[0] * 64) % 64),
-					int((translated_floor_point[1] * 64) % 64))
-
-				floor_rgb = convert_int_rgb(floor[final_point[0], final_point[1]])
-				ceiling_rgb = convert_int_rgb(ceiling[final_point[0], final_point[1]])
-
-				buffer[x, y] = mix(floor_rgb, (darkness, darkness, darkness))
-				buffer[x, buffer.shape[1] - y] = mix(ceiling_rgb, (darkness, darkness, darkness))
 
 pygame.init()
 
-screen_surface = pygame.display.set_mode((128, 128), pygame.SCALED | pygame.FULLSCREEN, vsync=True)
+screen_surface = pygame.display.set_mode((128, 128), pygame.SCALED, vsync=False)
 pygame.mouse.set_visible(False)
 pygame.event.set_grab(True)
 
@@ -194,9 +248,10 @@ font = pygame.font.SysFont("Monospace" , 16 , bold = False)
 
 
 level = (
-	((64, 64), (70, 64), basic_wall_1),
-	((70, 64), (70, 70), basic_wall_1),
-	((64, 64), (70, 70), basic_wall_1)
+	((64, 64), (70, 64), basic_wall_1, 1.0),
+	((70, 64), (70, 70), basic_wall_1, 1.0),
+	((64, 64), (70, 70), basic_wall_1, 1.0),
+	((69, 66), (70, 70), basic_wall_1, 0.4)
 )
 
 floor = basic_wall_2
@@ -245,7 +300,8 @@ while running:
 
 	player.angle += (keys[pygame.K_d] - keys[pygame.K_a]) * 128 * dt
 
-	player.position = collision_check(player.position, move_position, 8 * dt, level)
+	#player.position = collision_check(player.position, move_position, 8 * dt, level)
+	player.position = move_position
 	scan_line(player.position, player.angle, player.fov, player.view_distance, player.offset_y, level, floor, ceiling, buffer)
 
 	pygame.surfarray.blit_array(screen_surface, buffer)
@@ -253,5 +309,6 @@ while running:
 
 	#This Is Unecessary In Closed Areas
 	pygame.display.flip()
+	buffer.fill(0)
 
 	dt = clock.tick() / 1000
