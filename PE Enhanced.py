@@ -105,7 +105,7 @@ def convert_int_rgb(code):
 
 
 @numba.jit(nopython=True, nogil=True, cache=False, fastmath=True)
-def scan_line(position, angle, fov, view_distance, offset_y, level, floor, ceiling, buffer):
+def scan_line(position, angle, fov, view_distance, offset_y, level, floor, ceiling, buffer, offset):
 	#Get The Interval Angle To Loop Through Every X-Coordinate Correctly
 	interval_angle = fov / buffer.shape[0]
 	half_height = int(buffer.shape[1] / 2)
@@ -146,9 +146,9 @@ def scan_line(position, angle, fov, view_distance, offset_y, level, floor, ceili
 				top_height = (half_height + wall_height) - 2 * wall_height * wall_reference[3]
 
 
-
 				#If We Are In The Same Sector, Don't Draw The Other Walls!
 				if sector != previous_sector:
+		
 					if previous_top_wall_height != -0.1:
 						bottom_height = clamp(bottom_height, 0, previous_top_wall_height)
 						top_height = clamp(top_height, 0, previous_top_wall_height)
@@ -166,28 +166,25 @@ def scan_line(position, angle, fov, view_distance, offset_y, level, floor, ceili
 					difference = int(previous_bottom_height - previous_top_height)
 					lerped_y = bottom_height
 
-					for y in range(top_height, previous_top_height):
-						lerped_y += .1
+					for y in range(clamp(top_height, 0, buffer.shape[1]), clamp(previous_top_height, 0, buffer.shape[1])):
 						#unfixed_wall_height = numpy.floor(half_height / distance) * (buffer.shape[0] / buffer.shape[1])
+						#print(previous_bottom_height - previous_top_height)
 
 						#Here We Will Shift The Calculations Down To The Floor Levels
-						floor_distance = buffer.shape[1] / (2 * lerped_y - buffer.shape[1])
+						floor_distance = buffer.shape[1] / (2 * y - buffer.shape[1])
 						floor_distance /= numpy.cos(translated_angle - numpy.radians(angle))
 
 						darkness = clamp(lerp(0, .5, 1 / floor_distance), 0, 1)
 
 						translated_floor_point = (
-							position[0] + (floor_distance) * numpy.cos(translated_angle),
-							position[1] + (floor_distance) * numpy.sin(translated_angle))
+							position[0] + (floor_distance) * numpy.cos(translated_angle) * (1 - wall_reference[3] * 2),
+							position[1] + (floor_distance) * numpy.sin(translated_angle) * (1 - wall_reference[3] * 2))
 
 						final_point = (
 							int((translated_floor_point[0] * 64) % 64),
 							int((translated_floor_point[1] * 64) % 64))
-
-						#print(y)
-
 						floor_rgb = convert_int_rgb(floor[final_point[0], final_point[1]])
-						buffer[x, y ] = mix(floor_rgb, (darkness, darkness, darkness))
+						buffer[x, int(y)] = mix(floor_rgb, (1, 1, 1))
 
 				previous_top_wall_height = top_height
 				previous_bottom_wall_height = bottom_height
@@ -197,7 +194,7 @@ def scan_line(position, angle, fov, view_distance, offset_y, level, floor, ceili
 
 pygame.init()
 
-screen_surface = pygame.display.set_mode((512, 512), pygame.SCALED, vsync=True)
+screen_surface = pygame.display.set_mode((256, 256), pygame.SCALED, vsync=True)
 pygame.mouse.set_visible(False)
 pygame.event.set_grab(True)
 
@@ -219,6 +216,23 @@ clock = pygame.time.Clock()
 font = pygame.font.SysFont("Monospace" , 16 , bold = False)
 
 
+#correct offset:
+# 0.1 -> 0.8
+# 0.2 -> 0.6
+# 0.3 -> 0.4
+# 0.4 -> 0.2
+# 0.5 -> 0.0
+
+#Therefore
+#Multiply The Offset By Two
+#Then Calculate The Difference From 1?
+
+#0.1 -> 0.1 * 2 = 0.2
+#1 - 0.2 = 0.8
+
+#0.2 -> 0.2 * 2 = 0.4
+#1 - 0.4 = 0.6
+
 level = (
 	((64, 64), (70, 64), basic_wall_1, 0.1, 1),
 	((70, 64), (70, 70), basic_wall_1, 0.1, 1),
@@ -235,6 +249,8 @@ second_part_wall = None
 
 dt = 0
 
+offset = 1
+
 while running:
 	keys = pygame.key.get_pressed()
 
@@ -249,8 +265,8 @@ while running:
 		if event.type == pygame.KEYDOWN:
 			down_keys = pygame.key.get_pressed()
 			if down_keys[pygame.K_DOWN] or down_keys[pygame.K_UP]:
-				player.fov += (down_keys[pygame.K_UP] - down_keys[pygame.K_DOWN])
-				print("Changing FOV To:", player.fov)
+				offset += (down_keys[pygame.K_UP] - down_keys[pygame.K_DOWN]) * .1
+				print("Changing Offset To:", offset)
 
 		if event.type == pygame.MOUSEBUTTONDOWN:
 			if pygame.mouse.get_pressed()[0]:
@@ -271,13 +287,18 @@ while running:
 		player.position[1] + (numpy.sin(numpy.radians(player.angle)) * (keys[pygame.K_w] - keys[pygame.K_s]) * 2 * dt)
 	)
 
-	player.angle += (keys[pygame.K_d] - keys[pygame.K_a]) * 128 * dt
+	move_position = (
+		move_position[0] + (numpy.cos(numpy.radians(player.angle + 90)) * (keys[pygame.K_d] - keys[pygame.K_a]) * 2 * dt),
+		move_position[1] + (numpy.sin(numpy.radians(player.angle + 90)) * (keys[pygame.K_d] - keys[pygame.K_a]) * 2 * dt),
+	)
+	#player.angle += (keys[pygame.K_d] - keys[pygame.K_a]) * 128 * dt
 
 	#player.position = collision_check(player.position, move_position, 8 * dt, level)
 	player.position = move_position
 
+
 	#scan_floor(player.position, player.angle, player.fov, player.view_distance, player.offset_y, floor)
-	scan_line(player.position, player.angle, player.fov, player.view_distance, player.offset_y, level, floor, ceiling, buffer)
+	scan_line(player.position, player.angle, player.fov, player.view_distance, player.offset_y, level, floor, ceiling, buffer, offset)
 
 	pygame.surfarray.blit_array(screen_surface, buffer)
 	screen_surface.blit(font.render("FPS: " + str(int(clock.get_fps())), False, (255, 255, 255)), (0, 0))
