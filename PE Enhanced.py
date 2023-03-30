@@ -11,7 +11,7 @@ class Player:
 		self.offset_y = 32
 
 		
-@numba.jit(nopython=True, nogil=True, cache=False, fastmath=True)
+@numba.jit(nopython=True, nogil=True, cache=True, fastmath=True)
 def check_intersection(wall_1, wall_2):
 	x1, y1 = wall_1[0]
 	x2, y2 = wall_1[1]
@@ -32,12 +32,12 @@ def check_intersection(wall_1, wall_2):
 	y = y1 + ua * (y2-y1)
 	return (x,y)	
 
-@numba.jit(nopython=True, nogil=True, cache=False, fastmath=True)
+@numba.jit(nopython=True, nogil=True, cache=True, fastmath=True)
 def clamp(value, minimum, maximum):
 	return max(minimum, min(value, maximum))
 
 
-@numba.jit(nopython=True, nogil=True, cache=False, fastmath=True)
+@numba.jit(nopython=True, nogil=True, cache=True, fastmath=True)
 def get_closest_wall(position, translated_angle, angle, translated_point, level):
 	closest_wall = level[1]
 	intersection_position = (0, 0)
@@ -57,10 +57,15 @@ def get_closest_wall(position, translated_angle, angle, translated_point, level)
 
 			all_walls_intersected.append((closest_distance, checked_intersection, wall))
 
-	return sorted(all_walls_intersected, key=lambda tup: tup[0])
+	for i in range(len(all_walls_intersected)):
+		for j in range(0, len(all_walls_intersected) - i - 1):
+			if all_walls_intersected[j][0] > all_walls_intersected[j + 1][0]:
+				all_walls_intersected[j], all_walls_intersected[j + 1] = all_walls_intersected[j + 1], all_walls_intersected[j]
+
+	return all_walls_intersected
 
 
-@numba.jit(nopython=True, nogil=True, cache=False, fastmath=True)
+@numba.jit(nopython=True, nogil=True, cache=True, fastmath=True)
 def normalize(direction):
 	magnitude = numpy.sqrt(direction[0] * direction[0] + direction[1] * direction[1])
 	if magnitude > 0:
@@ -69,7 +74,7 @@ def normalize(direction):
 	return (0, 0)
 
 
-@numba.jit(nopython=True, nogil=True, cache=False, fastmath=True)
+@numba.jit(nopython=True, nogil=True, cache=True, fastmath=True)
 def collision_check(old_position, new_position, velocity, level):
 	for wall in level:
 		move_difference_segment = ((old_position[0], old_position[1]), (new_position[0], new_position[1]))
@@ -81,12 +86,12 @@ def collision_check(old_position, new_position, velocity, level):
 	return new_position
 
 
-@numba.jit(nopython=True, nogil=True, cache=False, fastmath=True)
+@numba.jit(nopython=True, nogil=True, cache=True, fastmath=True)
 def lerp(a, b, t):
 	return a + (b - a) * t
 
 
-@numba.jit(nopython=True, nogil=True, cache=False, fastmath=True)
+@numba.jit(nopython=True, nogil=True, cache=True, fastmath=True)
 def mix(rgb_1, rgb_2):
 	mixed_r = int(rgb_1[0] * rgb_2[0]) << 16
 	mixed_g = int(rgb_1[1] * rgb_2[1]) << 8
@@ -95,7 +100,7 @@ def mix(rgb_1, rgb_2):
 	return mixed_r + mixed_g + mixed_b
 
 
-@numba.jit(nopython=True, nogil=True, cache=False, fastmath=True)
+@numba.jit(nopython=True, nogil=True, cache=True, fastmath=True)
 def convert_int_rgb(code):
 	converted_r = (code >> 16) & 0xff
 	converted_g = (code >> 8) & 0xff
@@ -104,7 +109,7 @@ def convert_int_rgb(code):
 	return converted_r, converted_g, converted_b
 
 
-@numba.jit(nopython=True, nogil=True, cache=False, fastmath=True)
+@numba.jit(nopython=True, nogil=True, cache=True, fastmath=True)
 def scan_line(position, angle, fov, view_distance, offset_y, level, floor, ceiling, buffer, offset):
 	#Get The Interval Angle To Loop Through Every X-Coordinate Correctly
 	interval_angle = fov / buffer.shape[0]
@@ -186,7 +191,7 @@ def scan_line(position, angle, fov, view_distance, offset_y, level, floor, ceili
 
 pygame.init()
 
-screen_surface = pygame.display.set_mode((256, 256), pygame.SCALED | pygame.FULLSCREEN, vsync=True)
+screen_surface = pygame.display.set_mode((256, 256), pygame.SCALED, vsync=False)
 pygame.mouse.set_visible(False)
 pygame.event.set_grab(True)
 
@@ -264,19 +269,6 @@ while running:
 			if down_keys[pygame.K_DOWN] or down_keys[pygame.K_UP]:
 				player.fov += (down_keys[pygame.K_UP] - down_keys[pygame.K_DOWN])
 				print("Changing Offset To:", player.fov)
-
-		if event.type == pygame.MOUSEBUTTONDOWN:
-			if pygame.mouse.get_pressed()[0]:
-				if first_part_wall == None:
-					first_part_wall = (int(player.position[0]), int(int(player.position[1])))
-				else:
-					second_part_wall = (int(player.position[0]), int(int(player.position[1])))
-					new_wall = first_part_wall, second_part_wall, basic_wall_1
-		
-					level.append(new_wall)
-		
-					first_part_wall = None
-					second_part_wall = None
 
 	#Player Movement
 	move_position = (
