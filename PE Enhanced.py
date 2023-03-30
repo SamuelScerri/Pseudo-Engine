@@ -120,15 +120,21 @@ def scan_line(position, angle, fov, view_distance, offset_y, level, floor, ceili
 		intersected_walls = get_closest_wall(position, translated_angle, angle, translated_point, level)
 
 		previous_top_wall_height = -0.1
+		previous_bottom_wall_height = -0.1
+		previous_wall_height = -0.1
+
+		previous_sector = -1
 
 		for wall in intersected_walls:
-			distance = wall[0] * numpy.cos(translated_angle - numpy.radians(angle))
+			distance = wall[0]
+			cos_distance = wall[0] * numpy.cos(translated_angle - numpy.radians(angle))
+
 			intersection_position = wall[1]
 			wall_reference = wall[2]
-
+			sector = wall_reference[4]
 
 			if distance != 0:
-				wall_height = numpy.floor(half_height / distance) * (buffer.shape[0] / buffer.shape[1])
+				wall_height = numpy.floor(half_height / cos_distance) * (buffer.shape[0] / buffer.shape[1])
 
 				texture_distance = numpy.sqrt(
 					numpy.power(wall_reference[0][0] - intersection_position[0], 2) +
@@ -139,93 +145,59 @@ def scan_line(position, angle, fov, view_distance, offset_y, level, floor, ceili
 				bottom_height = half_height + wall_height
 				top_height = (half_height + wall_height) - 2 * wall_height * wall_reference[3]
 
-				if previous_top_wall_height != -0.1:
-					bottom_height = clamp(bottom_height, 0, previous_top_wall_height)
-					top_height = clamp(top_height, 0, previous_top_wall_height)
 
-				#Wall Casting
-				for y in range(clamp(top_height, 0, buffer.shape[1]), clamp(bottom_height, 0, buffer.shape[1])):
-					texture_rgb = convert_int_rgb(wall_reference[2][int(texture_distance * 64), int((y - (half_height - wall_height)) / wall_height * 32)])
-					buffer[x, y] = mix(texture_rgb, (darkness, darkness, darkness))
 
-				floor_range = buffer.shape[1]
+				#If We Are In The Same Sector, Don't Draw The Other Walls!
+				if sector != previous_sector:
+					if previous_top_wall_height != -0.1:
+						bottom_height = clamp(bottom_height, 0, previous_top_wall_height)
+						top_height = clamp(top_height, 0, previous_top_wall_height)
 
-				if previous_top_wall_height != -0.1:
-					floor_range = clamp(floor_range, 0, previous_top_wall_height)
+					#Wall Casting
+					for y in range(clamp(top_height, 0, buffer.shape[1]), clamp(bottom_height, 0, buffer.shape[1])):
+						texture_rgb = convert_int_rgb(wall_reference[2][int(texture_distance * 64), int((y - (half_height - wall_height)) / wall_height * 32)])
+						buffer[x, y] = mix(texture_rgb, (darkness, darkness, darkness))
 
-				#Floor Casting
-				for y in range(clamp(bottom_height, 0, buffer.shape[1]), floor_range):
-					floor_distance = buffer.shape[1] / (2 * y - buffer.shape[1])
-					floor_distance /= numpy.cos(translated_angle - numpy.radians(angle))
+				#Here We Are Going To Draw The Ceiling, Or In This Case.... The Floor?
+				else:
+					previous_bottom_height = half_height + previous_wall_height
+					previous_top_height = (half_height + previous_wall_height) - 2 * previous_wall_height * wall_reference[3]
 
-					darkness = clamp(lerp(0, .5, 1 / floor_distance), 0, 1)
+					difference = int(previous_bottom_height - previous_top_height)
+					lerped_y = bottom_height
 
-					translated_floor_point = (
-						position[0] + floor_distance * numpy.cos(translated_angle) * (buffer.shape[0] / buffer.shape[1]),
-						position[1] + floor_distance * numpy.sin(translated_angle) * (buffer.shape[0] / buffer.shape[1]))
+					for y in range(top_height, previous_top_height):
+						lerped_y += .1
+						#unfixed_wall_height = numpy.floor(half_height / distance) * (buffer.shape[0] / buffer.shape[1])
 
-					final_point = (
-						int((translated_floor_point[0] * 64) % 64),
-						int((translated_floor_point[1] * 64) % 64))
+						#Here We Will Shift The Calculations Down To The Floor Levels
+						floor_distance = buffer.shape[1] / (2 * lerped_y - buffer.shape[1])
+						floor_distance /= numpy.cos(translated_angle - numpy.radians(angle))
 
-					floor_rgb = convert_int_rgb(floor[final_point[0], final_point[1]])
-					ceiling_rgb = convert_int_rgb(ceiling[final_point[0], final_point[1]])
+						darkness = clamp(lerp(0, .5, 1 / floor_distance), 0, 1)
 
-					buffer[x, y] = mix(floor_rgb, (darkness, darkness, darkness))
-					#buffer[x, buffer.shape[1] - y] = mix(ceiling_rgb, (darkness, darkness, darkness))					
+						translated_floor_point = (
+							position[0] + (floor_distance) * numpy.cos(translated_angle),
+							position[1] + (floor_distance) * numpy.sin(translated_angle))
 
-				#Ceiling Casting
+						final_point = (
+							int((translated_floor_point[0] * 64) % 64),
+							int((translated_floor_point[1] * 64) % 64))
 
-				#ceiling_range = 0
-				#for y in range(clamp(0, 0, buffer.shape[1]), top_height):
-				#	floor_distance = buffer.shape[1] / (2 * y - buffer.shape[1])
-				#	floor_distance /= numpy.cos(translated_angle - numpy.radians(angle))
+						#print(y)
 
-				#	darkness = clamp(lerp(0, .5, 1 / floor_distance), 0, 1)
-
-				#	translated_floor_point = (
-				#		position[0] + floor_distance * numpy.cos(translated_angle) * (buffer.shape[0] / buffer.shape[1]),
-				#		position[1] + floor_distance * numpy.sin(translated_angle) * (buffer.shape[0] / buffer.shape[1]))
-
-				#	final_point = (
-				#		int((translated_floor_point[0] * 64) % 64),
-				#		int((translated_floor_point[1] * 64) % 64))
-
-				#	floor_rgb = convert_int_rgb(floor[final_point[0], final_point[1]])
-				#	ceiling_rgb = convert_int_rgb(ceiling[final_point[0], final_point[1]])
-
-				#	buffer[x, y] = mix(floor_rgb, (darkness, darkness, darkness))
-
+						floor_rgb = convert_int_rgb(floor[final_point[0], final_point[1]])
+						buffer[x, y ] = mix(floor_rgb, (darkness, darkness, darkness))
 
 				previous_top_wall_height = top_height
+				previous_bottom_wall_height = bottom_height
+				previous_wall_height = wall_height
 
-		#closest_distance *= numpy.cos(translated_angle - numpy.radians(angle))
-
-		#if closest_distance != 0:
-		#	wall_height = numpy.floor(half_height / closest_distance) * (buffer.shape[0] / buffer.shape[1])
-					
-			#We Do % 1 To Repeat The Texture
-		#	texture_distance = numpy.sqrt(
-		#		numpy.power(closest_wall[0][0] - intersection_position[0], 2) +
-		#		numpy.power(closest_wall[0][1] - intersection_position[1], 2)) % 1
-
-		#	darkness = clamp(lerp(0, .5, 1 / closest_distance), 0, 1)
-
-		#	top_height = (half_height + wall_height) - 2 * wall_height * closest_wall[3]
-
-			#Wall Casting Code
-		#	for y in range(clamp(top_height, 0, buffer.shape[1]), clamp(half_height + wall_height, 0, buffer.shape[1])):
-		#		texture_rgb = convert_int_rgb(closest_wall[2][int(texture_distance * 64), int((y - (half_height - wall_height)) / wall_height * 32)])
-		#		buffer[x, y] = mix(texture_rgb, (darkness, darkness, darkness))
-
-
-			#Floor Casting Code
-		#	for y in range(clamp(half_height + wall_height, 0, buffer.shape[1]), buffer.shape[1]):
-
+				previous_sector = sector
 
 pygame.init()
 
-screen_surface = pygame.display.set_mode((128, 128), pygame.SCALED, vsync=False)
+screen_surface = pygame.display.set_mode((512, 512), pygame.SCALED, vsync=True)
 pygame.mouse.set_visible(False)
 pygame.event.set_grab(True)
 
@@ -240,7 +212,7 @@ basic_wall_2 = pygame.surfarray.array2d(pygame.image.load("texture2.png").conver
 basic_wall_3 = pygame.surfarray.array2d(pygame.image.load("texture3.png").convert())
 
 #Create Player
-player = Player((68, 66), 60, 128)
+player = Player((63, 63), 60, 128)
 
 #Create Frame Counter
 clock = pygame.time.Clock()
@@ -248,11 +220,12 @@ font = pygame.font.SysFont("Monospace" , 16 , bold = False)
 
 
 level = (
-	((64, 64), (70, 64), basic_wall_1, 1.0),
-	((70, 64), (70, 70), basic_wall_1, 1.0),
-	((64, 64), (70, 70), basic_wall_1, 1.0),
-	((69, 66), (70, 70), basic_wall_1, 0.4)
+	((64, 64), (70, 64), basic_wall_1, 0.1, 1),
+	((70, 64), (70, 70), basic_wall_1, 0.1, 1),
+	((64, 64), (70, 70), basic_wall_1, 0.1, 1),
+
 )
+
 
 floor = basic_wall_2
 ceiling = basic_wall_3
@@ -270,7 +243,7 @@ while running:
 			running = False
 
 		if event.type == pygame.MOUSEMOTION:
-			player.angle += event.rel[0] * .2
+			player.angle += event.rel[0] * .1
 
 
 		if event.type == pygame.KEYDOWN:
@@ -294,14 +267,16 @@ while running:
 
 	#Player Movement
 	move_position = (
-		player.position[0] + (numpy.cos(numpy.radians(player.angle)) * (keys[pygame.K_w] - keys[pygame.K_s]) * 8 * dt),
-		player.position[1] + (numpy.sin(numpy.radians(player.angle)) * (keys[pygame.K_w] - keys[pygame.K_s]) * 8 * dt)
+		player.position[0] + (numpy.cos(numpy.radians(player.angle)) * (keys[pygame.K_w] - keys[pygame.K_s]) * 2 * dt),
+		player.position[1] + (numpy.sin(numpy.radians(player.angle)) * (keys[pygame.K_w] - keys[pygame.K_s]) * 2 * dt)
 	)
 
 	player.angle += (keys[pygame.K_d] - keys[pygame.K_a]) * 128 * dt
 
 	#player.position = collision_check(player.position, move_position, 8 * dt, level)
 	player.position = move_position
+
+	#scan_floor(player.position, player.angle, player.fov, player.view_distance, player.offset_y, floor)
 	scan_line(player.position, player.angle, player.fov, player.view_distance, player.offset_y, level, floor, ceiling, buffer)
 
 	pygame.surfarray.blit_array(screen_surface, buffer)
