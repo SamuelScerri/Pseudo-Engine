@@ -128,6 +128,11 @@ def scan_line(position, angle, fov, view_distance, offset_y, level, floor, ceili
 		previous_bottom_wall_height = 0
 		previous_wall_height = 0
 
+		previous_top_wall_ceil_height = 0
+		previous_bottom_wall_ceil_height = 0
+		previous_wall_ceil_height = 0
+
+
 		previous_sector = 0
 		previous_before_sector = 0
 		previous_wall_offset = 0
@@ -138,10 +143,10 @@ def scan_line(position, angle, fov, view_distance, offset_y, level, floor, ceili
 
 			intersection_position = intersected_walls[wall][1]
 			wall_reference = intersected_walls[wall][2]
-			sector = wall_reference[4]
+			sector = wall_reference[5]
 
 			if distance != 0:
-				wall_height = numpy.floor(half_height / cos_distance) * (buffer.shape[0] / buffer.shape[1])
+				wall_height = (half_height / cos_distance) * (buffer.shape[0] / buffer.shape[1])
 
 				texture_distance = numpy.sqrt(
 					numpy.power(wall_reference[0][0] - intersection_position[0], 2) +
@@ -149,22 +154,32 @@ def scan_line(position, angle, fov, view_distance, offset_y, level, floor, ceili
 
 				darkness = clamp(lerp(0, .5, 1 / distance), 0, 1)
 
+				#Floor Casting Time!
 				bottom_height = (half_height + wall_height) - 2 * wall_height * offset_y
 				top_height = (half_height + wall_height) - 2 * wall_height * (wall_reference[3] + offset_y)
+
+
+				#Ceiling Casting Time!
+				top_height_ceiling = (half_height - wall_height)
+				bottom_height_ceiling = ((half_height - wall_height) + 2 * wall_height * (wall_reference[4]))
 				
 				#We Don't Overdraw!
 				if wall > 0:
 					bottom_height = clamp(bottom_height, 0, previous_top_wall_height)
 					top_height = clamp(top_height, 0, previous_top_wall_height)
 
+					bottom_height_ceiling = clamp(bottom_height_ceiling, 0, previous_bottom_wall_ceil_height)
+					top_height_ceiling = clamp(top_height_ceiling, 0, previous_top_wall_ceil_height)
 
+
+				#FLOOR
 
 				#If We Are In The Same Sector, Don't Draw The Other Walls!
 				if sector == previous_sector and wall > 0:
 					for y in range(clamp(top_height, 0, buffer.shape[1]), clamp(previous_top_wall_height, 0, buffer.shape[1])):
 						#print("Before Divide")
 
-						if (2 * y - buffer.shape[1]) != 0:
+						if (2 * y - buffer.shape[1]) > 0:
 							floor_distance = buffer.shape[1] / (2 * y - buffer.shape[1])
 
 							#print("After Divide")
@@ -181,14 +196,14 @@ def scan_line(position, angle, fov, view_distance, offset_y, level, floor, ceili
 								int((translated_floor_point[0] * 64) % 64),
 								int((translated_floor_point[1] * 64) % 64))
 							floor_rgb = convert_int_rgb(floor[final_point[0], final_point[1]])
-							buffer[x, y] = mix(floor_rgb, (1, 1, 1))				
+							buffer[x, y] = mix(floor_rgb, (1, 1, 1))		
 
 				#Here The Sector Has Changed Most Likely
 				else:
 					#We Are Going To Check If The Future Wall That Will Be Drawn Is In The Same Sector, If It Isn't, Don't Draw The Wall
 					if wall + 1 < len(intersected_walls):
 						#Get The Sector & Compare
-						if sector == intersected_walls[wall + 1][2][4]:
+						if sector == intersected_walls[wall + 1][2][5]:
 
 							#If It Is The Same Sector, Draw It
 							for y in range(clamp(top_height, 0, buffer.shape[1]), clamp(bottom_height, 0, buffer.shape[1])):
@@ -196,7 +211,7 @@ def scan_line(position, angle, fov, view_distance, offset_y, level, floor, ceili
 								buffer[x, y] = mix(texture_rgb, (1, 1, 1))
 						else:
 							for y in range(clamp(top_height, 0, buffer.shape[1]), buffer.shape[1]):
-								if (2 * y - buffer.shape[1]) != 0:
+								if (2 * y - buffer.shape[1]) > 0:
 									floor_distance = buffer.shape[1] / (2 * y - buffer.shape[1])
 									floor_distance /= numpy.cos(translated_angle - numpy.radians(angle))
 
@@ -211,11 +226,11 @@ def scan_line(position, angle, fov, view_distance, offset_y, level, floor, ceili
 										int((translated_floor_point[0] * 64) % 64),
 										int((translated_floor_point[1] * 64) % 64))
 									floor_rgb = convert_int_rgb(floor[final_point[0], final_point[1]])
-									buffer[x, y] = mix(floor_rgb, (1, 1, 1))	
+									buffer[x, y] = mix(floor_rgb, (1, 1, 1))
 
 					if wall + 1 >= len(intersected_walls):
 						for y in range(clamp(top_height, 0, buffer.shape[1]), buffer.shape[1]):
-							if (2 * y - buffer.shape[1]) != 0:
+							if (2 * y - buffer.shape[1]) > 0:
 								floor_distance = buffer.shape[1] / (2 * y - buffer.shape[1])
 								floor_distance /= numpy.cos(translated_angle - numpy.radians(angle))
 
@@ -230,19 +245,102 @@ def scan_line(position, angle, fov, view_distance, offset_y, level, floor, ceili
 									int((translated_floor_point[0] * 64) % 64),
 									int((translated_floor_point[1] * 64) % 64))
 								floor_rgb = convert_int_rgb(floor[final_point[0], final_point[1]])
-								buffer[x, y] = mix(floor_rgb, (1, 1, 1))	
+								buffer[x, y] = mix(floor_rgb, (1, 1, 1))
+
+
+
+
+				#CEILING
+
+				#If We Are In The Same Sector, Don't Draw The Other Walls!
+				if sector == previous_sector and wall > 0:
+					for y in range(clamp(previous_bottom_wall_ceil_height, 0, buffer.shape[1]), clamp(bottom_height_ceiling, 0, buffer.shape[1])):
+						#print("Before Divide")
+
+						if (2 * y - buffer.shape[1]) < 0:
+							floor_distance = buffer.shape[1] / (2 * y - buffer.shape[1])
+
+							#print("After Divide")
+							floor_distance /= numpy.cos(translated_angle - numpy.radians(angle))
+
+							darkness = clamp(lerp(0, 1, 1 / floor_distance), 0, 1)
+
+							#We Multiply The Final Result To Offset The Floor Correctly
+							translated_floor_point = (
+								position[0] + (floor_distance) * numpy.cos(translated_angle) * (1 - (wall_reference[4]) * 2),
+								position[1] + (floor_distance) * numpy.sin(translated_angle) * (1 - (wall_reference[4]) * 2))
+
+							final_point = (
+								int((translated_floor_point[0] * 64) % 64),
+								int((translated_floor_point[1] * 64) % 64))
+							floor_rgb = convert_int_rgb(floor[final_point[0], final_point[1]])
+							buffer[x, y] = mix(floor_rgb, (1, 1, 1))		
+
+				#Here The Sector Has Changed Most Likely
+				else:
+					#We Are Going To Check If The Future Wall That Will Be Drawn Is In The Same Sector, If It Isn't, Don't Draw The Wall
+					if wall + 1 < len(intersected_walls):
+						#Get The Sector & Compare
+						if sector == intersected_walls[wall + 1][2][5]:
+
+							#If It Is The Same Sector, Draw It
+							for y in range(clamp(top_height_ceiling, 0, buffer.shape[1]), clamp(bottom_height_ceiling, 0, buffer.shape[1])):
+								texture_rgb = convert_int_rgb(wall_reference[2][int(texture_distance * 64), int((y - ((half_height - wall_height))) / wall_height * 32)])
+								buffer[x, y] = mix(texture_rgb, (1, 1, 1))
+						else:
+							for y in range(0, top_height_ceiling):
+								if (2 * y - buffer.shape[1]) < 0:
+									floor_distance = buffer.shape[1] / (2 * y - buffer.shape[1])
+									floor_distance /= numpy.cos(translated_angle - numpy.radians(angle))
+
+									darkness = clamp(lerp(0, 1, 1 / floor_distance), 0, 1)
+
+									#We Multiply The Final Result To Offset The Floor Correctly
+									translated_floor_point = (
+										position[0] + (floor_distance) * numpy.cos(translated_angle) * (1 - (wall_reference[4]) * 2),
+										position[1] + (floor_distance) * numpy.sin(translated_angle) * (1 - (wall_reference[4]) * 2))
+
+									final_point = (
+										int((translated_floor_point[0] * 64) % 64),
+										int((translated_floor_point[1] * 64) % 64))
+									floor_rgb = convert_int_rgb(floor[final_point[0], final_point[1]])
+									buffer[x, y] = mix(floor_rgb, (1, 1, 1))
+
+					if wall + 1 >= len(intersected_walls):
+						for y in range(0, top_height_ceiling):
+							if (2 * y - buffer.shape[1]) < 0:
+								floor_distance = buffer.shape[1] / (2 * y - buffer.shape[1])
+								floor_distance /= numpy.cos(translated_angle - numpy.radians(angle))
+
+								darkness = clamp(lerp(0, 1, 1 / floor_distance), 0, 1)
+
+								#We Multiply The Final Result To Offset The Floor Correctly
+								translated_floor_point = (
+									position[0] + (floor_distance) * numpy.cos(translated_angle) * (1 - (wall_reference[4]) * 2),
+									position[1] + (floor_distance) * numpy.sin(translated_angle) * (1 - (wall_reference[4]) * 2))
+
+								final_point = (
+									int((translated_floor_point[0] * 64) % 64),
+									int((translated_floor_point[1] * 64) % 64))
+								floor_rgb = convert_int_rgb(floor[final_point[0], final_point[1]])
+								buffer[x, y] = mix(floor_rgb, (1, 1, 1))
 
 				previous_top_wall_height = top_height
 				previous_bottom_wall_height = bottom_height
 				previous_wall_height = wall_height
 				previous_wall_offset = wall_reference[3]
 
+				previous_top_wall_ceil_height = top_height_ceiling
+				previous_bottom_wall_ceil_height = bottom_height_ceiling
+				previous_wall_ceil_height = wall_height
+				previous_wall_ceil_offset = wall_reference[4]
+
 				previous_before_sector = previous_sector
 				previous_sector = sector
 
 pygame.init()
 
-screen_surface = pygame.display.set_mode((512, 512), pygame.SCALED, vsync=True)
+screen_surface = pygame.display.set_mode((256, 256), pygame.SCALED, vsync=True)
 pygame.mouse.set_visible(False)
 pygame.event.set_grab(True)
 
@@ -284,17 +382,17 @@ font = pygame.font.SysFont("Monospace" , 16 , bold = False)
 second_offset = 7
 
 level = (
-	((64, 64), (70, 64), basic_wall_2, 0.8, 1),
-	((70, 64), (70, 70), basic_wall_2, 0.8, 1),
-	((64, 64), (70, 70), basic_wall_2, 0.8, 1),
+	((64, 64), (70, 64), basic_wall_2, 0.8, 0.2, 1),
+	((70, 64), (70, 70), basic_wall_2, 0.8, 0.2, 1),
+	((64, 64), (70, 70), basic_wall_2, 0.8, 0.2, 1),
 
-	((64, 64 + second_offset), (70, 64 + second_offset), basic_wall_1, 0.4, 0),
-	((70, 64 + second_offset), (70, 70 + second_offset), basic_wall_1, 0.4, 0),
-	((64, 64 + second_offset), (70, 70 + second_offset), basic_wall_1, 0.4, 0),
+	((64, 64 + second_offset), (70, 64 + second_offset), basic_wall_1, 0.4, 0.2, 0),
+	((70, 64 + second_offset), (70, 70 + second_offset), basic_wall_1, 0.4, 0.2, 0),
+	((64, 64 + second_offset), (70, 70 + second_offset), basic_wall_1, 0.4, 0.2, 0),
 
-	((64 + second_offset, 64 + second_offset), (70 + second_offset, 64 + second_offset), basic_wall_1, 0.0, 2),
-	((70 + second_offset, 64 + second_offset), (70 + second_offset, 70 + second_offset), basic_wall_1, 0.0, 2),
-	((64 + second_offset, 64 + second_offset), (70 + second_offset, 70 + second_offset), basic_wall_1, 0.0, 2),
+	((64 + second_offset, 64 + second_offset), (70 + second_offset, 64 + second_offset), basic_wall_1, 0.0, 0.2, 2),
+	((70 + second_offset, 64 + second_offset), (70 + second_offset, 70 + second_offset), basic_wall_1, 0.0, 0.2, 2),
+	((64 + second_offset, 64 + second_offset), (70 + second_offset, 70 + second_offset), basic_wall_1, 0.0, 0.2, 2),
 )
 
 
