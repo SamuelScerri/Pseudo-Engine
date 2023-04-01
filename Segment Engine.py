@@ -9,7 +9,7 @@ import numba
 
 PLAYER_POSITION, PLAYER_ANGLE, PLAYER_VISION, PLAYER_DISTANCE, PLAYER_OFFSET = 0, 1, 2, 3, 4
 
-WALL_POINT_A, WALL_POINT_B, WALL_FLOOR_HEIGHT, WALL_CEILING_HEIGHT, WALL_SEGMENT, WALL_TEXTURE = 0, 1, 2, 3, 4, 5
+WALL_POINT_A, WALL_POINT_B, WALL_FLOOR_HEIGHT, WALL_CEILING_HEIGHT, WALL_SEGMENT, WALL_TEXTURE, WALL_FLOOR_TEXTURE = 0, 1, 2, 3, 4, 5, 6
 
 INTERSECTED_DISTANCE, INTERSECTED_POSITION, INTERSECTED_WALL = 0, 1, 2
 
@@ -46,10 +46,7 @@ def check_intersection(wall_1, wall_2):
 #This Is Very Useful For Ceiling Casts & Making Functions More Generalized
 @numba.jit(nopython=True, nogil=True, cache=True, fastmath=True)
 def clamp_in_order(value, minimum, maximum):
-	if minimum < maximum:
-		return max(minimum, min(value, maximum))
-	else:
-		return max(maximum, min(value, minimum))
+	return max(minimum, min(value, maximum))
 
 
 #Gets The Closest Walls That Have Been Intersected With
@@ -79,7 +76,7 @@ def get_closest_wall(position, translated_point, level):
 
 #Scan The Entire Screen From Left To Right & Render The Walls & Flors
 @numba.jit(nopython=True, nogil=True, cache=True, fastmath=True)
-def scan_line(player, level, buffer):
+def scan_line(player, level, buffer, debug_offset_floor, debug_offset_ceiling):
 	#Obtain The Interval Angle To Rotate Correctly
 	interval_angle = player[2] / buffer.shape[0]
 	half_height = buffer.shape[1] / 2
@@ -114,11 +111,83 @@ def scan_line(player, level, buffer):
 					numpy.power(wall_reference[INTERSECTED_WALL][WALL_POINT_A][0] - wall_reference[INTERSECTED_POSITION][0], 2) +
 					numpy.power(wall_reference[INTERSECTED_WALL][WALL_POINT_A][1] - wall_reference[INTERSECTED_POSITION][1], 2)) % 1
 
-				floor_height = (half_height + wall_height, (half_height + wall_height) - 2 * wall_height * (wall_reference[INTERSECTED_WALL][WALL_FLOOR_HEIGHT]))
-				ceiling_height = (half_height - wall_height, (half_height - wall_height) + 2 * wall_height * (wall_reference[INTERSECTED_WALL][WALL_CEILING_HEIGHT]))
-
+				#We Get All The Wall Heights To Be Drawn Later
+				floor_height = (
+					clamp_in_order((half_height + wall_height) - 2 * wall_height * (wall_reference[INTERSECTED_WALL][WALL_FLOOR_HEIGHT] + debug_offset_floor), 0, buffer.shape[1]),
+					clamp_in_order(half_height + wall_height, 0, buffer.shape[1]))
+					
 				
+				ceiling_height = (
+					clamp_in_order(half_height - wall_height, 0, buffer.shape[1]), 
+					clamp_in_order((half_height - wall_height) + 2 * wall_height * (wall_reference[INTERSECTED_WALL][WALL_CEILING_HEIGHT] + debug_offset_ceiling), 0, buffer.shape[1]))
+				
+				cull_wall = False
 
+				#If There Was A Previous Wall Already Rendered, We Clamp The Values To Avoid Overdraw
+				if wall > 0:
+					floor_height = (
+						clamp_in_order(floor_height[0], previous_ceiling_height[1], previous_floor_height[0]),
+						clamp_in_order(floor_height[1], previous_ceiling_height[1], previous_floor_height[0]))
+
+					ceiling_height = (
+						clamp_in_order(ceiling_height[0], previous_ceiling_height[1], previous_floor_height[0]),
+						clamp_in_order(ceiling_height[1], previous_ceiling_height[1], previous_floor_height[0]))
+
+					#If The Previous Wall Segment Was The Same, We Are Going To Draw The Floor Instead
+					if wall_reference[INTERSECTED_WALL][WALL_SEGMENT] == intersected_walls[wall - 1][INTERSECTED_WALL][WALL_SEGMENT]:
+						cull_wall = True
+
+				floor_length = previous_floor_height[0]
+				ceiling_length = previous_ceiling_height[1]
+
+				#This Will Only Apply For The First Wall
+				#Every Segment Requires 3 Or 4 Points, If There Is Not Another Point Detected Then It Is Guranteed That The Player Is Stepping On Top Of The Segment
+				if wall == 0:
+					if wall < len(intersected_walls) - 1:
+						if wall_reference[INTERSECTED_WALL][WALL_SEGMENT] != intersected_walls[wall + 1][INTERSECTED_WALL][WALL_SEGMENT]:
+							cull_wall = True
+							floor_length = buffer.shape[1]
+							ceiling_length = 0
+
+					else:
+						cull_wall = True
+						floor_length = buffer.shape[1]
+						ceiling_length = 0
+
+				#Here We Will Draw The Walls
+				if cull_wall == False:
+					for y in range(floor_height[0], floor_height[1]):
+						buffer[x, y] = wall_reference[INTERSECTED_WALL][WALL_TEXTURE][int(texture_distance * 64), int((y - ((half_height + wall_height) - 2 * wall_height * 0)) / wall_height * 32)]
+
+					for y in range(ceiling_height[0], ceiling_height[1]):
+						buffer[x, y] = wall_reference[INTERSECTED_WALL][WALL_TEXTURE][int(texture_distance * 64), int((y - ((half_height + wall_height) - 2 * wall_height * 0)) / wall_height * 32)]
+
+				else:
+					#We Render The Floor
+					for y in range(floor_height[0], floor_length):
+						interpolation = 2 * y - buffer.shape[1]
+
+						if interpolation != 0:
+							floor_distance = (buffer.shape[1] / (2 * y - buffer.shape[1])) / numpy.cos(translated_angle - numpy.radians(player[PLAYER_ANGLE]))
+
+							translated_floor_point = (
+								player[PLAYER_POSITION][0] + floor_distance * numpy.cos(translated_angle) * (1 - (wall_reference[INTERSECTED_WALL][WALL_FLOOR_HEIGHT] + debug_offset_floor) * 2),
+								player[PLAYER_POSITION][1] + floor_distance * numpy.sin(translated_angle) * (1 - (wall_reference[INTERSECTED_WALL][WALL_FLOOR_HEIGHT] + debug_offset_floor) * 2))
+
+							buffer[x, y] = wall_reference[INTERSECTED_WALL][WALL_FLOOR_TEXTURE][int((translated_floor_point[0] * 64) % 64), int((translated_floor_point[1] * 64) % 64)]
+
+					#And We Finally Draw The Ceiling
+					for y in range(ceiling_length, ceiling_height[1]):
+						interpolation = 2 * y - buffer.shape[1]
+
+						if interpolation != 0:
+							floor_distance = (buffer.shape[1] / interpolation) / numpy.cos(translated_angle - numpy.radians(player[PLAYER_ANGLE]))
+
+							translated_floor_point = (
+								player[PLAYER_POSITION][0] + floor_distance * numpy.cos(translated_angle) * -(1 - (wall_reference[INTERSECTED_WALL][WALL_CEILING_HEIGHT] + debug_offset_ceiling) * 2),
+								player[PLAYER_POSITION][1] + floor_distance * numpy.sin(translated_angle) * -(1 - (wall_reference[INTERSECTED_WALL][WALL_CEILING_HEIGHT] + debug_offset_ceiling) * 2))
+
+							buffer[x, y] = wall_reference[INTERSECTED_WALL][WALL_FLOOR_TEXTURE][int((translated_floor_point[0] * 64) % 64), int((translated_floor_point[1] * 64) % 64)]
 				#These Are Stored For Later Comparisions
 				previous_floor_height = floor_height
 				previous_ceiling_height = ceiling_height
@@ -152,11 +221,20 @@ player = ((63, 63), 0, 60, 128)
 clock = pygame.time.Clock()
 font = pygame.font.SysFont("Monospace" , 16 , bold = False)
 
+second_offset = 7
+
+debug_offset_floor = 0
+debug_offset_ceiling = 0
+
 #Level Data
 level = (
-	((64, 64), (70, 64), 0.8, 0.2, 1, basic_wall_2),
-	((70, 64), (70, 70), 0.8, 0.2, 1, basic_wall_2),
-	((64, 64), (70, 70), 0.8, 0.2, 1, basic_wall_2),
+	((64, 64), (70, 64), 0.2, 0.6, 1, basic_wall_2, basic_wall_3),
+	((70, 64), (70, 70), 0.2, 0.6, 1, basic_wall_2, basic_wall_3),
+	((64, 64), (70, 70), 0.2, 0.6, 1, basic_wall_2, basic_wall_3),
+
+	((64, 64 + second_offset), (70, 64 + second_offset), 0.6, 0.2, 0, basic_wall_1, basic_wall_2),
+	((70, 64 + second_offset), (70, 70 + second_offset), 0.6, 0.2, 0, basic_wall_1, basic_wall_2),
+	((64, 64 + second_offset), (70, 70 + second_offset), 0.6, 0.2, 0, basic_wall_1, basic_wall_2),
 )
 
 dt = 0
@@ -173,12 +251,15 @@ while running:
 		(player[PLAYER_POSITION][0] + (numpy.cos(numpy.radians(player[PLAYER_ANGLE])) * (keys[pygame.K_w] - keys[pygame.K_s]) * 4 * dt),
 		player[PLAYER_POSITION][1] + (numpy.sin(numpy.radians(player[PLAYER_ANGLE])) * (keys[pygame.K_w] - keys[pygame.K_s]) * 4 * dt)),
 
-		player[PLAYER_ANGLE] + ((keys[pygame.K_RIGHT] - keys[pygame.K_LEFT]) * 128 * dt),
+		player[PLAYER_ANGLE] + ((keys[pygame.K_d] - keys[pygame.K_a]) * 128 * dt),
 		player[PLAYER_VISION],
 		player[PLAYER_DISTANCE],
 	)
 
-	scan_line(player, level, buffer)
+	scan_line(player, level, buffer, debug_offset_floor, debug_offset_ceiling)
+
+	debug_offset_ceiling += (keys[pygame.K_DOWN] - keys[pygame.K_UP]) * dt
+	debug_offset_floor += (keys[pygame.K_RIGHT] - keys[pygame.K_LEFT]) * dt
 
 	pygame.surfarray.blit_array(screen_surface, buffer)
 	screen_surface.blit(font.render("FPS: " + str(int(clock.get_fps())), False, (255, 255, 255)), (0, 0))
