@@ -11,6 +11,8 @@ PLAYER_POSITION, PLAYER_ANGLE, PLAYER_VISION, PLAYER_DISTANCE, PLAYER_OFFSET = 0
 
 WALL_POINT_A, WALL_POINT_B, WALL_FLOOR_HEIGHT, WALL_CEILING_HEIGHT, WALL_SEGMENT, WALL_TEXTURE = 0, 1, 2, 3, 4, 5
 
+INTERSECTED_DISTANCE, INTERSECTED_POSITION, INTERSECTED_WALL = 0, 1, 2
+
 
 #--------------------------------
 #Functions
@@ -62,7 +64,7 @@ def get_closest_wall(position, translated_point, level):
 		if checked_intersection != (0, 0):
 			distance = numpy.sqrt(
 				numpy.power(position[0] - checked_intersection[0], 2) +
-				numpy.power(posiiton[1] - checked_intersection[1], 2))
+				numpy.power(position[1] - checked_intersection[1], 2))
 
 			all_walls_intersected.append((distance, checked_intersection, wall))
 
@@ -83,7 +85,43 @@ def scan_line(player, level, buffer):
 	half_height = buffer.shape[1] / 2
 
 	for x in range(buffer.shape[0]):
-		pass
+		#Translate All Points According To Angle
+		translated_angle = numpy.radians((player[PLAYER_ANGLE] - player[PLAYER_VISION] / 2) + interval_angle * x)
+
+		translated_point = (
+			(player[PLAYER_POSITION][0], player[PLAYER_POSITION][1]),
+			(player[PLAYER_POSITION][0] + player[PLAYER_DISTANCE] * numpy.cos(translated_angle), player[PLAYER_POSITION][1] + player[PLAYER_DISTANCE] * numpy.sin(translated_angle)))
+
+		#We Get All The Intersected Walls From Closest To Furthest
+		intersected_walls = get_closest_wall(player[PLAYER_POSITION], translated_point, level)
+
+		#Previous Wall Information For Comparision
+		previous_floor_height = (0, 0)
+		previous_ceiling_height = (0, 0)
+
+		for wall in range(len(intersected_walls)):
+			if intersected_walls[wall][INTERSECTED_DISTANCE] != 0:
+				wall_reference = intersected_walls[wall]
+
+				#Fix The Distance To Remove The Fish-Eye Distortion
+				fixed_distance = wall_reference[INTERSECTED_DISTANCE] * numpy.cos(translated_angle - numpy.radians(player[PLAYER_ANGLE]))
+				segment = wall_reference[INTERSECTED_WALL][WALL_SEGMENT]
+
+				wall_height = (half_height / fixed_distance)
+
+				#Get The Repeated Texture Coordinate
+				texture_distance = numpy.sqrt(
+					numpy.power(wall_reference[INTERSECTED_WALL][WALL_POINT_A][0] - wall_reference[INTERSECTED_POSITION][0], 2) +
+					numpy.power(wall_reference[INTERSECTED_WALL][WALL_POINT_A][1] - wall_reference[INTERSECTED_POSITION][1], 2)) % 1
+
+				floor_height = (half_height + wall_height, (half_height + wall_height) - 2 * wall_height * (wall_reference[INTERSECTED_WALL][WALL_FLOOR_HEIGHT]))
+				ceiling_height = (half_height - wall_height, (half_height - wall_height) + 2 * wall_height * (wall_reference[INTERSECTED_WALL][WALL_CEILING_HEIGHT]))
+
+				
+
+				#These Are Stored For Later Comparisions
+				previous_floor_height = floor_height
+				previous_ceiling_height = ceiling_height
 
 
 #--------------------------------
@@ -93,7 +131,7 @@ def scan_line(player, level, buffer):
 
 pygame.init()
 
-screen_surface = pygame.display.set_mode((256, 256), pygame.SCALED, vsync=True)
+screen_surface = pygame.display.set_mode((256, 256), pygame.SCALED, vsync=False)
 pygame.mouse.set_visible(False)
 pygame.event.set_grab(True)
 
@@ -137,6 +175,7 @@ while running:
 
 		player[PLAYER_ANGLE] + ((keys[pygame.K_RIGHT] - keys[pygame.K_LEFT]) * 128 * dt),
 		player[PLAYER_VISION],
+		player[PLAYER_DISTANCE],
 	)
 
 	scan_line(player, level, buffer)
