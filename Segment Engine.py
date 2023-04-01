@@ -200,7 +200,7 @@ def scan_line(player, level, buffer, debug_offset_floor, debug_offset_ceiling):
 
 pygame.init()
 
-screen_surface = pygame.display.set_mode((256, 256), pygame.SCALED, vsync=False)
+screen_surface = pygame.display.set_mode((256, 256), pygame.SCALED | pygame.FULLSCREEN, vsync=True)
 pygame.mouse.set_visible(False)
 pygame.event.set_grab(True)
 
@@ -215,7 +215,7 @@ basic_wall_2 = pygame.surfarray.array2d(pygame.image.load("texture2.png").conver
 basic_wall_3 = pygame.surfarray.array2d(pygame.image.load("texture3.png").convert())
 
 #Create Player
-player = ((63, 63), 0, 60, 128)
+player = ((63, 63), 0, 75, 128)
 
 #Create Frame Counter
 clock = pygame.time.Clock()
@@ -238,6 +238,7 @@ level = (
 )
 
 dt = 0
+mouse_velocity = 0
 
 while running:
 	keys = pygame.key.get_pressed()
@@ -246,12 +247,15 @@ while running:
 		if event.type == pygame.QUIT:
 			running = False
 
+		if event.type == pygame.MOUSEMOTION:
+			mouse_velocity += event.rel[0] * .1
+
 	#Player Movement
 	player = (
-		(player[PLAYER_POSITION][0] + (numpy.cos(numpy.radians(player[PLAYER_ANGLE])) * (keys[pygame.K_w] - keys[pygame.K_s]) * 4 * dt),
-		player[PLAYER_POSITION][1] + (numpy.sin(numpy.radians(player[PLAYER_ANGLE])) * (keys[pygame.K_w] - keys[pygame.K_s]) * 4 * dt)),
+		(player[PLAYER_POSITION][0] + (numpy.cos(numpy.radians(player[PLAYER_ANGLE])) * (keys[pygame.K_w] - keys[pygame.K_s]) * 4 * dt) + (numpy.cos(numpy.radians(player[PLAYER_ANGLE] + 90)) * (keys[pygame.K_d] - keys[pygame.K_a]) * 4 * dt),
+		player[PLAYER_POSITION][1] + (numpy.sin(numpy.radians(player[PLAYER_ANGLE])) * (keys[pygame.K_w] - keys[pygame.K_s]) * 4 * dt) + (numpy.sin(numpy.radians(player[PLAYER_ANGLE] + 90)) * (keys[pygame.K_d] - keys[pygame.K_a]) * 4 * dt)),
 
-		player[PLAYER_ANGLE] + ((keys[pygame.K_d] - keys[pygame.K_a]) * 128 * dt),
+		player[PLAYER_ANGLE] + mouse_velocity,
 		player[PLAYER_VISION],
 		player[PLAYER_DISTANCE],
 	)
@@ -269,3 +273,4 @@ while running:
 	buffer.fill(0)
 
 	dt = clock.tick() / 1000
+	mouse_velocity = 0
