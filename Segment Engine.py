@@ -71,6 +71,27 @@ def get_closest_wall(position, translated_point, level):
 			if all_walls_intersected[j][0] > all_walls_intersected[j + 1][0]:
 				all_walls_intersected[j], all_walls_intersected[j + 1] = all_walls_intersected[j + 1], all_walls_intersected[j]
 
+	#This Will Order By Segments
+	#Not Entirely Happy With This Algorithm But It Works
+	if len(all_walls_intersected) > 0:
+		single_value = -1
+		found = False
+
+		#Here The Walls Are Ordered By Segments
+		for i in range(1, len(all_walls_intersected)):
+			found = False
+
+			for j in range(i, len(all_walls_intersected)):
+				if all_walls_intersected[i - 1][INTERSECTED_WALL][WALL_SEGMENT] == all_walls_intersected[j][INTERSECTED_WALL][WALL_SEGMENT]:
+					found = True
+					all_walls_intersected[i], all_walls_intersected[j] = all_walls_intersected[j], all_walls_intersected[i]
+
+			if single_value == -1 and not found:
+				single_value = i
+
+		if found == False:
+			all_walls_intersected.insert(0, all_walls_intersected.pop(single_value))
+
 	return all_walls_intersected
 
 
@@ -188,6 +209,7 @@ def scan_line(player, level, buffer, debug_offset_floor, debug_offset_ceiling):
 								player[PLAYER_POSITION][1] + floor_distance * numpy.sin(translated_angle) * -(1 - (wall_reference[INTERSECTED_WALL][WALL_CEILING_HEIGHT] + debug_offset_ceiling) * 2))
 
 							buffer[x, y] = wall_reference[INTERSECTED_WALL][WALL_FLOOR_TEXTURE][int((translated_floor_point[0] * 64) % 64), int((translated_floor_point[1] * 64) % 64)]
+
 				#These Are Stored For Later Comparisions
 				previous_floor_height = floor_height
 				previous_ceiling_height = ceiling_height
@@ -200,7 +222,7 @@ def scan_line(player, level, buffer, debug_offset_floor, debug_offset_ceiling):
 
 pygame.init()
 
-screen_surface = pygame.display.set_mode((256, 256), pygame.SCALED | pygame.FULLSCREEN, vsync=True)
+screen_surface = pygame.display.set_mode((256, 256), pygame.SCALED, vsync=False)
 pygame.mouse.set_visible(False)
 pygame.event.set_grab(True)
 
@@ -213,6 +235,7 @@ buffer = numpy.zeros((screen_surface.get_width(), screen_surface.get_height()), 
 basic_wall_1 = pygame.surfarray.array2d(pygame.image.load("texture.png").convert())
 basic_wall_2 = pygame.surfarray.array2d(pygame.image.load("texture2.png").convert())
 basic_wall_3 = pygame.surfarray.array2d(pygame.image.load("texture3.png").convert())
+basic_wall_4 = pygame.surfarray.array2d(pygame.image.load("texture4.png").convert())
 
 #Create Player
 player = ((63, 63), 0, 75, 128)
@@ -221,20 +244,25 @@ player = ((63, 63), 0, 75, 128)
 clock = pygame.time.Clock()
 font = pygame.font.SysFont("Monospace" , 16 , bold = False)
 
-second_offset = 7
-
 debug_offset_floor = 0
 debug_offset_ceiling = 0
 
 #Level Data
 level = (
+
+
+	((64, 71), (70, 71), 0.6, 0.0, 0, basic_wall_1, basic_wall_2),
+	((70, 71), (70, 77), 0.6, 0.0, 0, basic_wall_1, basic_wall_2),
+	((64, 71), (70, 77), 0.6, 0.0, 0, basic_wall_1, basic_wall_2),
+
+	((64, 64), (64, 71), 0.0, 0.2, 2, basic_wall_4, basic_wall_4),
+	((64, 71), (70, 71), 0.0, 0.2, 2, basic_wall_4, basic_wall_4),
+	((70, 71), (70, 70), 0.0, 0.2, 2, basic_wall_4, basic_wall_4),
+	((70, 70), (64, 64), 0.0, 0.2, 2, basic_wall_4, basic_wall_4),
+
 	((64, 64), (70, 64), 0.2, 0.6, 1, basic_wall_2, basic_wall_3),
 	((70, 64), (70, 70), 0.2, 0.6, 1, basic_wall_2, basic_wall_3),
 	((64, 64), (70, 70), 0.2, 0.6, 1, basic_wall_2, basic_wall_3),
-
-	((64, 64 + second_offset), (70, 64 + second_offset), 0.6, 0.2, 0, basic_wall_1, basic_wall_2),
-	((70, 64 + second_offset), (70, 70 + second_offset), 0.6, 0.2, 0, basic_wall_1, basic_wall_2),
-	((64, 64 + second_offset), (70, 70 + second_offset), 0.6, 0.2, 0, basic_wall_1, basic_wall_2),
 )
 
 dt = 0
@@ -249,6 +277,8 @@ while running:
 
 		if event.type == pygame.MOUSEMOTION:
 			mouse_velocity += event.rel[0] * .1
+
+	#print(player[PLAYER_POSITION])
 
 	#Player Movement
 	player = (
