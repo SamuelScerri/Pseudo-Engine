@@ -330,10 +330,10 @@ while running:
 		(keys[pygame.K_d] - keys[pygame.K_a])))
 
 	#Player Movement (Could Be Improved)
-	velocity[0] = lerp(velocity[0], numpy.cos(numpy.radians(player[PLAYER_ANGLE])) * direction[0] + numpy.cos(numpy.radians(player[PLAYER_ANGLE] + 90)) * direction[1], .06)
-	velocity[1] = lerp(velocity[1], numpy.sin(numpy.radians(player[PLAYER_ANGLE])) * direction[0] + numpy.sin(numpy.radians(player[PLAYER_ANGLE] + 90)) * direction[1], .06)
+	velocity[0] = lerp(velocity[0], numpy.cos(numpy.radians(player[PLAYER_ANGLE])) * direction[0] + numpy.cos(numpy.radians(player[PLAYER_ANGLE] + 90)) * direction[1], 8 * dt)
+	velocity[1] = lerp(velocity[1], numpy.sin(numpy.radians(player[PLAYER_ANGLE])) * direction[0] + numpy.sin(numpy.radians(player[PLAYER_ANGLE] + 90)) * direction[1], 8 * dt)
 
-	bobbing_strength = lerp(bobbing_strength, ((keys[pygame.K_w] - keys[pygame.K_s]) != 0 or (keys[pygame.K_d] - keys[pygame.K_a]) != 0), .06)
+	bobbing_strength = lerp(bobbing_strength, ((keys[pygame.K_w] - keys[pygame.K_s]) != 0 or (keys[pygame.K_d] - keys[pygame.K_a]) != 0), 8 * dt)
 
 	player = (
 		(player[PLAYER_POSITION][0] + velocity[0] * 6 * dt,
