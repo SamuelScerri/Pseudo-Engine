@@ -49,6 +49,15 @@ def lerp(a, b, t):
 
 
 @numba.jit(nopython=True, nogil=True, cache=True, fastmath=True)
+def normalize(direction):
+	magnitude = numpy.sqrt(direction[0] * direction[0] + direction[1] * direction[1])
+	if magnitude > 0:
+		return (direction[0] / magnitude, direction[1] / magnitude)
+
+	return (0, 0)
+
+
+@numba.jit(nopython=True, nogil=True, cache=True, fastmath=True)
 def mix(rgb_1, rgb_2):
 	mixed_r = int(rgb_1[0] * rgb_2[0]) << 16
 	mixed_g = int(rgb_1[1] * rgb_2[1]) << 8
@@ -120,7 +129,7 @@ def get_closest_wall(position, translated_point, level):
 
 #Scan The Entire Screen From Left To Right & Render The Walls & Floors
 @numba.jit(nopython=True, nogil=True, cache=True, fastmath=True)
-def scan_line(player, level, buffer, debug_offset_floor, debug_offset_ceiling):
+def scan_line(player, level, buffer):
 	#Obtain The Interval Angle To Rotate Correctly
 	interval_angle = player[2] / buffer.shape[0]
 	half_height = buffer.shape[1] / 2
@@ -157,13 +166,13 @@ def scan_line(player, level, buffer, debug_offset_floor, debug_offset_ceiling):
 
 				#We Get All The Wall Heights To Be Drawn Later
 				floor_height = (
-					clamp_in_order((half_height + wall_height) - 2 * wall_height * (wall_reference[INTERSECTED_WALL][WALL_FLOOR_HEIGHT] + debug_offset_floor), 0, buffer.shape[1]),
-					clamp_in_order(half_height + wall_height, 0, buffer.shape[1]))
+					clamp_in_order((half_height + wall_height) - 2 * wall_height * (wall_reference[INTERSECTED_WALL][WALL_FLOOR_HEIGHT] + player[PLAYER_OFFSET]), 0, buffer.shape[1]),
+					clamp_in_order((half_height + wall_height) - 2 * wall_height * (player[PLAYER_OFFSET]), 0, buffer.shape[1]))
 					
 				
 				ceiling_height = (
-					clamp_in_order(half_height - wall_height, 0, buffer.shape[1]), 
-					clamp_in_order((half_height - wall_height) + 2 * wall_height * (wall_reference[INTERSECTED_WALL][WALL_CEILING_HEIGHT] + debug_offset_ceiling), 0, buffer.shape[1]))
+					clamp_in_order((half_height - wall_height) + 2 * wall_height * (-player[PLAYER_OFFSET]), 0, buffer.shape[1]), 
+					clamp_in_order((half_height - wall_height) + 2 * wall_height * (wall_reference[INTERSECTED_WALL][WALL_CEILING_HEIGHT] - player[PLAYER_OFFSET]), 0, buffer.shape[1]))
 				
 				cull_wall = False
 
@@ -202,13 +211,13 @@ def scan_line(player, level, buffer, debug_offset_floor, debug_offset_ceiling):
 				if cull_wall == False:
 					for y in range(floor_height[0], floor_height[1]):
 						darkness = clamp_in_order(lerp(0, 1, 1 / fixed_distance), 0, 1)
-						color_value = convert_int_rgb(wall_reference[INTERSECTED_WALL][WALL_TEXTURE][int(texture_distance * 64), int((y - ((half_height + wall_height) - 2 * wall_height * 0)) / wall_height * 32)])
+						color_value = convert_int_rgb(wall_reference[INTERSECTED_WALL][WALL_TEXTURE][int(texture_distance * 64), int((y - ((half_height + wall_height) - 2 * wall_height * player[PLAYER_OFFSET])) / wall_height * 32)])
 
 						buffer[x, y] = mix(color_value, (darkness, darkness, darkness))
 
 					for y in range(ceiling_height[0], ceiling_height[1]):
 						darkness = clamp_in_order(lerp(0, 1, 1 / fixed_distance), 0, 1)
-						color_value = convert_int_rgb(wall_reference[INTERSECTED_WALL][WALL_TEXTURE][int(texture_distance * 64), int((y - ((half_height + wall_height) - 2 * wall_height * 0)) / wall_height * 32)])
+						color_value = convert_int_rgb(wall_reference[INTERSECTED_WALL][WALL_TEXTURE][int(texture_distance * 64), int((y - ((half_height + wall_height) - 2 * wall_height * player[PLAYER_OFFSET])) / wall_height * 32)])
 
 						buffer[x, y] = mix(color_value, (darkness, darkness, darkness))
 
@@ -221,8 +230,8 @@ def scan_line(player, level, buffer, debug_offset_floor, debug_offset_ceiling):
 							floor_distance = (buffer.shape[1] / interpolation) / numpy.cos(translated_angle - numpy.radians(player[PLAYER_ANGLE]))
 
 							translated_floor_point = (
-								player[PLAYER_POSITION][0] + floor_distance * numpy.cos(translated_angle) * (1 - (wall_reference[INTERSECTED_WALL][WALL_FLOOR_HEIGHT] + debug_offset_floor) * 2),
-								player[PLAYER_POSITION][1] + floor_distance * numpy.sin(translated_angle) * (1 - (wall_reference[INTERSECTED_WALL][WALL_FLOOR_HEIGHT] + debug_offset_floor) * 2))
+								player[PLAYER_POSITION][0] + floor_distance * numpy.cos(translated_angle) * (1 - (wall_reference[INTERSECTED_WALL][WALL_FLOOR_HEIGHT] + player[PLAYER_OFFSET]) * 2),
+								player[PLAYER_POSITION][1] + floor_distance * numpy.sin(translated_angle) * (1 - (wall_reference[INTERSECTED_WALL][WALL_FLOOR_HEIGHT] + player[PLAYER_OFFSET]) * 2))
 
 							darkness = clamp_in_order(lerp(0, 1, 1 / floor_distance), 0, 1)
 							color_value = convert_int_rgb(wall_reference[INTERSECTED_WALL][WALL_FLOOR_TEXTURE][int((translated_floor_point[0] * 64) % 64), int((translated_floor_point[1] * 64) % 64)])
@@ -237,8 +246,8 @@ def scan_line(player, level, buffer, debug_offset_floor, debug_offset_ceiling):
 							floor_distance = (buffer.shape[1] / interpolation) / numpy.cos(translated_angle - numpy.radians(player[PLAYER_ANGLE]))
 
 							translated_floor_point = (
-								player[PLAYER_POSITION][0] + floor_distance * numpy.cos(translated_angle) * -(1 - (wall_reference[INTERSECTED_WALL][WALL_CEILING_HEIGHT] + debug_offset_ceiling) * 2),
-								player[PLAYER_POSITION][1] + floor_distance * numpy.sin(translated_angle) * -(1 - (wall_reference[INTERSECTED_WALL][WALL_CEILING_HEIGHT] + debug_offset_ceiling) * 2))
+								player[PLAYER_POSITION][0] + floor_distance * numpy.cos(translated_angle) * -(1 - (wall_reference[INTERSECTED_WALL][WALL_CEILING_HEIGHT] - player[PLAYER_OFFSET]) * 2),
+								player[PLAYER_POSITION][1] + floor_distance * numpy.sin(translated_angle) * -(1 - (wall_reference[INTERSECTED_WALL][WALL_CEILING_HEIGHT] - player[PLAYER_OFFSET]) * 2))
 
 							darkness = clamp_in_order(lerp(0, 1, 1 / -floor_distance), 0, 1)
 							color_value = convert_int_rgb(wall_reference[INTERSECTED_WALL][WALL_FLOOR_TEXTURE][int((translated_floor_point[0] * 64) % 64), int((translated_floor_point[1] * 64) % 64)])
@@ -273,7 +282,7 @@ basic_wall_3 = pygame.surfarray.array2d(pygame.image.load("texture3.png").conver
 basic_wall_4 = pygame.surfarray.array2d(pygame.image.load("texture4.png").convert())
 
 #Create Player
-player = ((63, 63), 0, 75, 128)
+player = ((63, 63), 0, 75, 128, 0)
 
 #Create Frame Counter
 clock = pygame.time.Clock()
@@ -301,6 +310,10 @@ level = (
 dt = 0
 mouse_velocity = 0
 
+velocity = [0, 0]
+bobbing = 0
+bobbing_strength = 0
+
 while running:
 	keys = pygame.key.get_pressed()
 
@@ -311,22 +324,33 @@ while running:
 		if event.type == pygame.MOUSEMOTION:
 			mouse_velocity += event.rel[0] * .1
 
+
+	direction = normalize((
+		(keys[pygame.K_w] - keys[pygame.K_s]),
+		(keys[pygame.K_d] - keys[pygame.K_a])))
+
 	#Player Movement (Could Be Improved)
+	velocity[0] = lerp(velocity[0], numpy.cos(numpy.radians(player[PLAYER_ANGLE])) * direction[0] + numpy.cos(numpy.radians(player[PLAYER_ANGLE] + 90)) * direction[1], .06)
+	velocity[1] = lerp(velocity[1], numpy.sin(numpy.radians(player[PLAYER_ANGLE])) * direction[0] + numpy.sin(numpy.radians(player[PLAYER_ANGLE] + 90)) * direction[1], .06)
+
+	bobbing_strength = lerp(bobbing_strength, ((keys[pygame.K_w] - keys[pygame.K_s]) != 0 or (keys[pygame.K_d] - keys[pygame.K_a]) != 0), .06)
+
 	player = (
-		(player[PLAYER_POSITION][0] + (numpy.cos(numpy.radians(player[PLAYER_ANGLE])) * (keys[pygame.K_w] - keys[pygame.K_s]) * 4 * dt) + (numpy.cos(numpy.radians(player[PLAYER_ANGLE] + 90)) * (keys[pygame.K_d] - keys[pygame.K_a]) * 4 * dt),
-		player[PLAYER_POSITION][1] + (numpy.sin(numpy.radians(player[PLAYER_ANGLE])) * (keys[pygame.K_w] - keys[pygame.K_s]) * 4 * dt) + (numpy.sin(numpy.radians(player[PLAYER_ANGLE] + 90)) * (keys[pygame.K_d] - keys[pygame.K_a]) * 4 * dt)),
+		(player[PLAYER_POSITION][0] + velocity[0] * 6 * dt,
+		player[PLAYER_POSITION][1] + velocity[1] * 6 * dt),
 
 		player[PLAYER_ANGLE] + mouse_velocity,
 		player[PLAYER_VISION],
 		player[PLAYER_DISTANCE],
+		(numpy.sin(bobbing) / 32) * bobbing_strength
 	)
 
+	bobbing += 16 * dt
+
 	#This Is Where The Magic Happens!
-	scan_line(player, level, buffer, debug_offset_floor, debug_offset_ceiling)
+	scan_line(player, level, buffer)
 
 	#This Will Be Removed Later
-	debug_offset_ceiling += (keys[pygame.K_DOWN] - keys[pygame.K_UP]) * dt
-	debug_offset_floor += (keys[pygame.K_RIGHT] - keys[pygame.K_LEFT]) * dt
 
 	pygame.surfarray.blit_array(screen_surface, buffer)
 	screen_surface.blit(font.render("FPS: " + str(int(clock.get_fps())), False, (255, 255, 255)), (0, 0))
