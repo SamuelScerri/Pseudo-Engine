@@ -118,7 +118,7 @@ def get_closest_wall(position, translated_point, level):
 	return all_walls_intersected
 
 
-#Scan The Entire Screen From Left To Right & Render The Walls & Flors
+#Scan The Entire Screen From Left To Right & Render The Walls & Floors
 @numba.jit(nopython=True, nogil=True, cache=True, fastmath=True)
 def scan_line(player, level, buffer, debug_offset_floor, debug_offset_ceiling):
 	#Obtain The Interval Angle To Rotate Correctly
