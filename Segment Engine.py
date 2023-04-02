@@ -43,6 +43,29 @@ def check_intersection(wall_1, wall_2):
 	return (x1 + ua * (x2 - x1), y1 + ua * (y2 - y1))
 
 
+@numba.jit(nopython=True, nogil=True, cache=True, fastmath=True)
+def lerp(a, b, t):
+	return a + (b - a) * t
+
+
+@numba.jit(nopython=True, nogil=True, cache=True, fastmath=True)
+def mix(rgb_1, rgb_2):
+	mixed_r = int(rgb_1[0] * rgb_2[0]) << 16
+	mixed_g = int(rgb_1[1] * rgb_2[1]) << 8
+	mixed_b = int(rgb_1[2] * rgb_2[2])
+
+	return mixed_r + mixed_g + mixed_b
+
+
+@numba.jit(nopython=True, nogil=True, cache=True, fastmath=True)
+def convert_int_rgb(code):
+	converted_r = (code >> 16) & 0xff
+	converted_g = (code >> 8) & 0xff
+	converted_b = code & 0xff
+
+	return converted_r, converted_g, converted_b
+
+
 #This Is Very Useful For Ceiling Casts & Making Functions More Generalized
 @numba.jit(nopython=True, nogil=True, cache=True, fastmath=True)
 def clamp_in_order(value, minimum, maximum):
@@ -178,10 +201,16 @@ def scan_line(player, level, buffer, debug_offset_floor, debug_offset_ceiling):
 				#Here We Will Draw The Walls
 				if cull_wall == False:
 					for y in range(floor_height[0], floor_height[1]):
-						buffer[x, y] = wall_reference[INTERSECTED_WALL][WALL_TEXTURE][int(texture_distance * 64), int((y - ((half_height + wall_height) - 2 * wall_height * 0)) / wall_height * 32)]
+						darkness = clamp_in_order(lerp(0, 1, 1 / fixed_distance), 0, 1)
+						color_value = convert_int_rgb(wall_reference[INTERSECTED_WALL][WALL_TEXTURE][int(texture_distance * 64), int((y - ((half_height + wall_height) - 2 * wall_height * 0)) / wall_height * 32)])
+
+						buffer[x, y] = mix(color_value, (darkness, darkness, darkness))
 
 					for y in range(ceiling_height[0], ceiling_height[1]):
-						buffer[x, y] = wall_reference[INTERSECTED_WALL][WALL_TEXTURE][int(texture_distance * 64), int((y - ((half_height + wall_height) - 2 * wall_height * 0)) / wall_height * 32)]
+						darkness = clamp_in_order(lerp(0, 1, 1 / fixed_distance), 0, 1)
+						color_value = convert_int_rgb(wall_reference[INTERSECTED_WALL][WALL_TEXTURE][int(texture_distance * 64), int((y - ((half_height + wall_height) - 2 * wall_height * 0)) / wall_height * 32)])
+
+						buffer[x, y] = mix(color_value, (darkness, darkness, darkness))
 
 				else:
 					#We Render The Floor
@@ -189,13 +218,16 @@ def scan_line(player, level, buffer, debug_offset_floor, debug_offset_ceiling):
 						interpolation = 2 * y - buffer.shape[1]
 
 						if interpolation != 0:
-							floor_distance = (buffer.shape[1] / (2 * y - buffer.shape[1])) / numpy.cos(translated_angle - numpy.radians(player[PLAYER_ANGLE]))
+							floor_distance = (buffer.shape[1] / interpolation) / numpy.cos(translated_angle - numpy.radians(player[PLAYER_ANGLE]))
 
 							translated_floor_point = (
 								player[PLAYER_POSITION][0] + floor_distance * numpy.cos(translated_angle) * (1 - (wall_reference[INTERSECTED_WALL][WALL_FLOOR_HEIGHT] + debug_offset_floor) * 2),
 								player[PLAYER_POSITION][1] + floor_distance * numpy.sin(translated_angle) * (1 - (wall_reference[INTERSECTED_WALL][WALL_FLOOR_HEIGHT] + debug_offset_floor) * 2))
 
-							buffer[x, y] = wall_reference[INTERSECTED_WALL][WALL_FLOOR_TEXTURE][int((translated_floor_point[0] * 64) % 64), int((translated_floor_point[1] * 64) % 64)]
+							darkness = clamp_in_order(lerp(0, 1, 1 / floor_distance), 0, 1)
+							color_value = convert_int_rgb(wall_reference[INTERSECTED_WALL][WALL_FLOOR_TEXTURE][int((translated_floor_point[0] * 64) % 64), int((translated_floor_point[1] * 64) % 64)])
+
+							buffer[x, y] = mix(color_value, (darkness, darkness, darkness))
 
 					#And We Finally Draw The Ceiling
 					for y in range(ceiling_length, ceiling_height[1]):
@@ -208,7 +240,10 @@ def scan_line(player, level, buffer, debug_offset_floor, debug_offset_ceiling):
 								player[PLAYER_POSITION][0] + floor_distance * numpy.cos(translated_angle) * -(1 - (wall_reference[INTERSECTED_WALL][WALL_CEILING_HEIGHT] + debug_offset_ceiling) * 2),
 								player[PLAYER_POSITION][1] + floor_distance * numpy.sin(translated_angle) * -(1 - (wall_reference[INTERSECTED_WALL][WALL_CEILING_HEIGHT] + debug_offset_ceiling) * 2))
 
-							buffer[x, y] = wall_reference[INTERSECTED_WALL][WALL_FLOOR_TEXTURE][int((translated_floor_point[0] * 64) % 64), int((translated_floor_point[1] * 64) % 64)]
+							darkness = clamp_in_order(lerp(0, 1, 1 / -floor_distance), 0, 1)
+							color_value = convert_int_rgb(wall_reference[INTERSECTED_WALL][WALL_FLOOR_TEXTURE][int((translated_floor_point[0] * 64) % 64), int((translated_floor_point[1] * 64) % 64)])
+
+							buffer[x, y] = mix(color_value, (darkness, darkness, darkness))
 
 				#These Are Stored For Later Comparisions
 				previous_floor_height = floor_height
@@ -222,7 +257,7 @@ def scan_line(player, level, buffer, debug_offset_floor, debug_offset_ceiling):
 
 pygame.init()
 
-screen_surface = pygame.display.set_mode((256, 256), pygame.SCALED, vsync=False)
+screen_surface = pygame.display.set_mode((256, 256), pygame.SCALED | pygame.FULLSCREEN, vsync=True)
 pygame.mouse.set_visible(False)
 pygame.event.set_grab(True)
 
