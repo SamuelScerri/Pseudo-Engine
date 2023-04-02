@@ -282,10 +282,8 @@ font = pygame.font.SysFont("Monospace" , 16 , bold = False)
 debug_offset_floor = 0
 debug_offset_ceiling = 0
 
-#Level Data
+#Level Data, This Is Temporary And Will Instead Load Through External Files In A Later Version
 level = (
-
-
 	((64, 71), (70, 71), 0.6, 0.0, 0, basic_wall_1, basic_wall_2),
 	((70, 71), (70, 77), 0.6, 0.0, 0, basic_wall_1, basic_wall_2),
 	((64, 71), (70, 77), 0.6, 0.0, 0, basic_wall_1, basic_wall_2),
@@ -313,9 +311,7 @@ while running:
 		if event.type == pygame.MOUSEMOTION:
 			mouse_velocity += event.rel[0] * .1
 
-	#print(player[PLAYER_POSITION])
-
-	#Player Movement
+	#Player Movement (Could Be Improved)
 	player = (
 		(player[PLAYER_POSITION][0] + (numpy.cos(numpy.radians(player[PLAYER_ANGLE])) * (keys[pygame.K_w] - keys[pygame.K_s]) * 4 * dt) + (numpy.cos(numpy.radians(player[PLAYER_ANGLE] + 90)) * (keys[pygame.K_d] - keys[pygame.K_a]) * 4 * dt),
 		player[PLAYER_POSITION][1] + (numpy.sin(numpy.radians(player[PLAYER_ANGLE])) * (keys[pygame.K_w] - keys[pygame.K_s]) * 4 * dt) + (numpy.sin(numpy.radians(player[PLAYER_ANGLE] + 90)) * (keys[pygame.K_d] - keys[pygame.K_a]) * 4 * dt)),
@@ -325,16 +321,19 @@ while running:
 		player[PLAYER_DISTANCE],
 	)
 
+	#This Is Where The Magic Happens!
 	scan_line(player, level, buffer, debug_offset_floor, debug_offset_ceiling)
 
+	#This Will Be Removed Later
 	debug_offset_ceiling += (keys[pygame.K_DOWN] - keys[pygame.K_UP]) * dt
 	debug_offset_floor += (keys[pygame.K_RIGHT] - keys[pygame.K_LEFT]) * dt
 
 	pygame.surfarray.blit_array(screen_surface, buffer)
 	screen_surface.blit(font.render("FPS: " + str(int(clock.get_fps())), False, (255, 255, 255)), (0, 0))
 
-	#This Is Unecessary In Closed Areas
 	pygame.display.flip()
+
+	#This Is Unecessary In Closed Areas
 	buffer.fill(0)
 
 	dt = clock.tick() / 1000
