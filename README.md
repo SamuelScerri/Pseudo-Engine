@@ -10,6 +10,12 @@ Features:
 - Uses Numba For Better Performance
 - No Overdrawing! So No Wasted Performance!
 
+How To Run:
+-
+- Install Pygame, Numpy & Numba With The Pip Command
+- Run Segment Engine.py
+- Profit!
+
 Showcase:
 -
 ![Showcase 1](https://user-images.githubusercontent.com/92179479/229337773-45b9b1b9-4480-4f46-b3e5-60ca6500334a.png)
