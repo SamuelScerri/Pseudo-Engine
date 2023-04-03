@@ -265,8 +265,9 @@ def scan_line(player, level, buffer):
 
 
 pygame.init()
+pygame.mixer.init()
 
-screen_surface = pygame.display.set_mode((256, 256), pygame.SCALED | pygame.FULLSCREEN, vsync=True)
+screen_surface = pygame.display.set_mode((256, 256), pygame.SCALED, vsync=True)
 pygame.mouse.set_visible(False)
 pygame.event.set_grab(True)
 
@@ -274,6 +275,8 @@ running = True
 
 #Create Buffer
 buffer = numpy.zeros((screen_surface.get_width(), screen_surface.get_height()), dtype=numpy.int32)
+step_sound = pygame.mixer.Sound("Step.wav")
+step_sound.set_volume(1)
 
 #Create Textures
 basic_wall_1 = pygame.surfarray.array2d(pygame.image.load("texture.png").convert())
@@ -330,27 +333,33 @@ while running:
 		(keys[pygame.K_d] - keys[pygame.K_a])))
 
 	#Player Movement (Could Be Improved)
-	velocity[0] = lerp(velocity[0], numpy.cos(numpy.radians(player[PLAYER_ANGLE])) * direction[0] + numpy.cos(numpy.radians(player[PLAYER_ANGLE] + 90)) * direction[1], 8 * dt)
-	velocity[1] = lerp(velocity[1], numpy.sin(numpy.radians(player[PLAYER_ANGLE])) * direction[0] + numpy.sin(numpy.radians(player[PLAYER_ANGLE] + 90)) * direction[1], 8 * dt)
+	velocity[0] = lerp(velocity[0], (numpy.cos(numpy.radians(player[PLAYER_ANGLE])) * direction[0] + numpy.cos(numpy.radians(player[PLAYER_ANGLE] + 90)) * direction[1]) * .1, .2)
+	velocity[1] = lerp(velocity[1], (numpy.sin(numpy.radians(player[PLAYER_ANGLE])) * direction[0] + numpy.sin(numpy.radians(player[PLAYER_ANGLE] + 90)) * direction[1]) * .1, .2)
 
-	bobbing_strength = lerp(bobbing_strength, ((keys[pygame.K_w] - keys[pygame.K_s]) != 0 or (keys[pygame.K_d] - keys[pygame.K_a]) != 0), 8 * dt)
+	bobbing_strength = lerp(bobbing_strength, ((keys[pygame.K_w] - keys[pygame.K_s]) != 0 or (keys[pygame.K_d] - keys[pygame.K_a]) != 0), .2)
+
+	old_position = player[PLAYER_POSITION]
 
 	player = (
-		(player[PLAYER_POSITION][0] + velocity[0] * 6 * dt,
-		player[PLAYER_POSITION][1] + velocity[1] * 6 * dt),
+		(player[PLAYER_POSITION][0] + velocity[0],
+		player[PLAYER_POSITION][1] + velocity[1]),
 
 		player[PLAYER_ANGLE] + mouse_velocity,
 		player[PLAYER_VISION],
 		player[PLAYER_DISTANCE],
-		(numpy.sin(bobbing) / 32) * bobbing_strength
+		(numpy.sin(bobbing) / 64) * bobbing_strength
 	)
 
-	bobbing += 16 * dt
+	bobbing += .4
+
+	if bobbing > numpy.radians(360):
+		bobbing -= numpy.radians(360)
+
+		if ((keys[pygame.K_w] - keys[pygame.K_s]) != 0 or (keys[pygame.K_d] - keys[pygame.K_a]) != 0):
+			step_sound.play()
 
 	#This Is Where The Magic Happens!
 	scan_line(player, level, buffer)
-
-	#This Will Be Removed Later
 
 	pygame.surfarray.blit_array(screen_surface, buffer)
 	screen_surface.blit(font.render("FPS: " + str(int(clock.get_fps())), False, (255, 255, 255)), (0, 0))
@@ -360,5 +369,5 @@ while running:
 	#This Is Unecessary In Closed Areas
 	buffer.fill(0)
 
-	dt = clock.tick() / 1000
+	dt = clock.tick(60)
 	mouse_velocity = 0
