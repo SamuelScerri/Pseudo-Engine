@@ -2,6 +2,9 @@ import pygame
 import numpy
 import numba
 
+import pymunk
+import pymunk.pygame_util
+
 #--------------------------------
 #Enumerations
 #--------------------------------
@@ -264,6 +267,10 @@ def scan_line(player, level, buffer):
 #--------------------------------
 
 
+#Physics
+space = pymunk.Space()
+space.gravity = (0, 0)
+
 pygame.init()
 pygame.mixer.init()
 
@@ -285,7 +292,7 @@ basic_wall_3 = pygame.surfarray.array2d(pygame.image.load("texture3.png").conver
 basic_wall_4 = pygame.surfarray.array2d(pygame.image.load("texture4.png").convert())
 
 #Create Player
-player = ((63, 63), 0, 75, 128, 0)
+player = ((67, 63), 0, 75, 128, 0)
 
 #Create Frame Counter
 clock = pygame.time.Clock()
@@ -310,12 +317,29 @@ level = (
 	((64, 64), (70, 70), 0.2, 0.6, 1, basic_wall_2, basic_wall_3),
 )
 
-dt = 0
+
+for wall in level:
+	if wall[WALL_FLOOR_HEIGHT] > 0:
+		physics_geometry = pymunk.Body(body_type=pymunk.Body.STATIC)
+		space.add(physics_geometry, pymunk.Segment(physics_geometry, wall[WALL_POINT_A], wall[WALL_POINT_B], .2))
+
+draw_options = pymunk.pygame_util.DrawOptions(screen_surface)
+
 mouse_velocity = 0
 
 velocity = [0, 0]
 bobbing = 0
 bobbing_strength = 0
+
+player_body = pymunk.Body()
+player_body.position = player[PLAYER_POSITION]
+player_shape = pymunk.Circle(player_body, .2)
+player_shape.mass = 1
+player_shape.friction = 0
+
+space.add(player_body, player_shape)
+
+dt = 0
 
 while running:
 	keys = pygame.key.get_pressed()
@@ -332,17 +356,23 @@ while running:
 		(keys[pygame.K_w] - keys[pygame.K_s]),
 		(keys[pygame.K_d] - keys[pygame.K_a])))
 
+
+
 	#Player Movement (Could Be Improved)
-	velocity[0] = lerp(velocity[0], (numpy.cos(numpy.radians(player[PLAYER_ANGLE])) * direction[0] + numpy.cos(numpy.radians(player[PLAYER_ANGLE] + 90)) * direction[1]) * .1, .2)
-	velocity[1] = lerp(velocity[1], (numpy.sin(numpy.radians(player[PLAYER_ANGLE])) * direction[0] + numpy.sin(numpy.radians(player[PLAYER_ANGLE] + 90)) * direction[1]) * .1, .2)
+	#velocity[0] = lerp(velocity[0], (numpy.cos(numpy.radians(player[PLAYER_ANGLE])) * direction[0] + numpy.cos(numpy.radians(player[PLAYER_ANGLE] + 90)) * direction[1]) * .1, .2)
+	#velocity[1] = lerp(velocity[1], (numpy.sin(numpy.radians(player[PLAYER_ANGLE])) * direction[0] + numpy.sin(numpy.radians(player[PLAYER_ANGLE] + 90)) * direction[1]) * .1, .2)
+
+
 
 	bobbing_strength = lerp(bobbing_strength, ((keys[pygame.K_w] - keys[pygame.K_s]) != 0 or (keys[pygame.K_d] - keys[pygame.K_a]) != 0), .2)
 
 	old_position = player[PLAYER_POSITION]
 
 	player = (
-		(player[PLAYER_POSITION][0] + velocity[0],
-		player[PLAYER_POSITION][1] + velocity[1]),
+		#(player[PLAYER_POSITION][0] + velocity[0],
+		#player[PLAYER_POSITION][1] + velocity[1]),
+
+		player_body.position,
 
 		player[PLAYER_ANGLE] + mouse_velocity,
 		player[PLAYER_VISION],
@@ -364,10 +394,21 @@ while running:
 	pygame.surfarray.blit_array(screen_surface, buffer)
 	screen_surface.blit(font.render("FPS: " + str(int(clock.get_fps())), False, (255, 255, 255)), (0, 0))
 
+	
+	player_shape.body.apply_impulse_at_local_point(
+		((numpy.cos(numpy.radians(player[PLAYER_ANGLE])) * direction[0] + numpy.cos(numpy.radians(player[PLAYER_ANGLE] + 90)) * direction[1]) * .2,
+		(numpy.sin(numpy.radians(player[PLAYER_ANGLE])) * direction[0] + numpy.sin(numpy.radians(player[PLAYER_ANGLE] + 90)) * direction[1]) * .2))
+	player_shape.body.velocity *= .8
+
+	#space.debug_draw(draw_options)
+
 	pygame.display.flip()
 
 	#This Is Unecessary In Closed Areas
 	buffer.fill(0)
 
-	dt = clock.tick(60)
+	for i in range(16):
+		space.step(.01)
+
+	clock.tick(60)
 	mouse_velocity = 0
