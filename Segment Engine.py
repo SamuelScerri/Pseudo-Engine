@@ -22,7 +22,7 @@ INTERSECTED_DISTANCE, INTERSECTED_POSITION, INTERSECTED_WALL = 0, 1, 2
 #--------------------------------
 
 
-#Checks The Intersection Between Two Line Segments
+#Checks The Intersection Between Two Line Segments3
 @numba.jit(nopython=True, nogil=True, cache=True, fastmath=True)
 def check_intersection(wall_1, wall_2):
 	x1, y1 = wall_1[0]
@@ -267,6 +267,8 @@ def scan_line(player, level, buffer):
 #--------------------------------
 
 
+should_cap = False
+
 #Physics
 space = pymunk.Space()
 space.gravity = (0, 0)
@@ -274,7 +276,7 @@ space.gravity = (0, 0)
 pygame.init()
 pygame.mixer.init()
 
-screen_surface = pygame.display.set_mode((256, 256), pygame.SCALED | pygame.FULLSCREEN, vsync=True)
+screen_surface = pygame.display.set_mode((512, 512), pygame.SCALED, vsync=True)
 pygame.mouse.set_visible(False)
 pygame.event.set_grab(True)
 
@@ -339,12 +341,6 @@ player_shape.friction = 0
 
 space.add(player_body, player_shape)
 dt = 0
-
-MOVEEVENT, t, trail = pygame.USEREVENT+1, 250, []
-pygame.time.set_timer(MOVEEVENT, 16)
-
-old_position = (0, 0)
-
 old_time = 0
 time_between_physics = 0
 
@@ -353,7 +349,6 @@ interpolated_rotation = 0
 rotation = player[PLAYER_ANGLE]
 
 update_rate = 0
-cap_mode = False
 
 previous_time = 0
 
@@ -369,13 +364,13 @@ while running:
 
 		if event.type == pygame.KEYDOWN:
 			if pygame.key.get_pressed()[pygame.K_SPACE]:
-				if cap_mode:
-					cap_mode = False
-				else: cap_mode = True
+				if should_cap:
+					should_cap = False
+				else:
+					should_cap = True
 
-		#This Is So That Physics Can Be Seperated From The Game Logic, We Can Also Now Do Interpolation
-	if update_rate >= 1000 / 30:
-		#print("Hell Yeah")
+	#This Is So That Game Logic Will Not Be Tied To The Rendering Speed, We Can Also Now Do Interpolation
+	while update_rate >= 1000 / 30:
 		old_position = player_body.position
 		old_rotation = rotation
 
@@ -395,12 +390,18 @@ while running:
 
 		time_between_physics = pygame.time.get_ticks() - old_time
 		old_time = pygame.time.get_ticks()
+
+		#We Don't Reset To Zero In Case The Game Is Running Slow, This Is A Sort Of "Catch-Up"
+		#Where If The Framerate Is 10, Then The Game Logic Will Run 3 More Times
 		update_rate -= (1000 / 30)
 		mouse_velocity = 0
 
 	if time_between_physics != 0:
 		interpolated_position = (lerp(old_position[0], player_body.position[0], update_rate / time_between_physics), lerp(old_position[1], player_body.position[1], update_rate / time_between_physics))
 		interpolated_rotation = lerp(old_rotation, rotation, update_rate / time_between_physics)
+	else:
+		interpolated_position = player_body.position
+		interpolated_rotation = rotation
 
 	player = (
 		interpolated_position,
@@ -414,6 +415,8 @@ while running:
 
 	bobbing_strength = lerp(bobbing_strength, ((keys[pygame.K_w] - keys[pygame.K_s]) != 0 or (keys[pygame.K_d] - keys[pygame.K_a]) != 0), 16 * dt)
 
+	#print(time_between_physics)
+
 	bobbing += 16 * dt
 
 	if bobbing > numpy.radians(360):
@@ -422,24 +425,23 @@ while running:
 		if ((keys[pygame.K_w] - keys[pygame.K_s]) != 0 or (keys[pygame.K_d] - keys[pygame.K_a]) != 0):
 			step_sound.play()
 
-
 	#This Is Where The Magic Happens!
 	scan_line(player, level, buffer)
 	pygame.surfarray.blit_array(screen_surface, buffer)
+
 	screen_surface.blit(font.render("FPS: " + str(int(clock.get_fps())), False, (255, 255, 255)), (0, 0))
+	#screen_surface.blit(font.render("Logic Delta: " + str(int(time_between_physics)), False, (255, 255, 255)), (0, 10))
 	pygame.display.flip()
 
-	#This Is Unecessary In Closed Areas
+	#This Is Unecessary In Closed Areas, But Performance Seems To Be Very Minimal, Might Be Removed After
+	#Implementing Skyboxes
 	buffer.fill(0)
 
-	#time_taken = clock.tick_busy_loop()
+	if should_cap:
+		clock.tick_busy_loop(10) / 1000
+	else:
+		clock.tick_busy_loop() / 1000
 
-	difference = pygame.time.get_ticks()
-	dt = (difference - previous_time) / 1000
-
-	update_rate += difference - previous_time
-	
-
-	previous_time = difference
+	update_rate += clock.get_time()
 
 pygame.quit()
