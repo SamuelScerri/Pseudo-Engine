@@ -276,7 +276,7 @@ space.gravity = (0, 0)
 pygame.init()
 pygame.mixer.init()
 
-screen_surface = pygame.display.set_mode((512, 512), pygame.SCALED, vsync=True)
+screen_surface = pygame.display.set_mode((256, 256), pygame.SCALED | pygame.FULLSCREEN, vsync=True)
 pygame.mouse.set_visible(False)
 pygame.event.set_grab(True)
 
@@ -288,6 +288,7 @@ step_sound = pygame.mixer.Sound("Step.wav")
 step_sound.set_volume(.2)
 
 #Create Textures
+#We Convert These To Arrays To Access The Texture Data Faster During The Rendering Process
 basic_wall_1 = pygame.surfarray.array2d(pygame.image.load("texture.png").convert())
 basic_wall_2 = pygame.surfarray.array2d(pygame.image.load("texture2.png").convert())
 basic_wall_3 = pygame.surfarray.array2d(pygame.image.load("texture3.png").convert())
@@ -299,9 +300,6 @@ player = ((67, 63), 0, 75, 128, 0)
 #Create Frame Counter
 clock = pygame.time.Clock()
 font = pygame.font.SysFont("Monospace" , 16 , bold = False)
-
-debug_offset_floor = 0
-debug_offset_ceiling = 0
 
 #Level Data, This Is Temporary And Will Instead Load Through External Files In A Later Version
 level = (
@@ -319,7 +317,7 @@ level = (
 	((64, 64), (70, 70), 0.2, 0.6, 1, basic_wall_2, basic_wall_3),
 )
 
-
+#Adding The Walls To The Physics Engine
 for wall in level:
 	if wall[WALL_FLOOR_HEIGHT] > 0:
 		physics_geometry = pymunk.Body(body_type=pymunk.Body.STATIC)
@@ -329,10 +327,12 @@ draw_options = pymunk.pygame_util.DrawOptions(screen_surface)
 
 mouse_velocity = 0
 
-velocity = [0, 0]
 bobbing = 0
 bobbing_strength = 0
 
+#Create The Player Rigidbody,
+#Friction Won't Matter Here As The Game's Logic Is Handled "Top-Down",
+#Instead We Multiply The Velocity And Can Be Seen In The Physics Logic
 player_body = pymunk.Body()
 player_body.position = player[PLAYER_POSITION]
 player_shape = pymunk.Circle(player_body, .2)
