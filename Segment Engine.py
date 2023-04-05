@@ -376,10 +376,13 @@ while running:
 		old_rotation = rotation
 		old_bobbing = final_bobbing
 
+		#Direction Here Is Normalized For Diagonal Movement,
+		#Without It Diagonal Movement Will Be Faster
 		direction = normalize((
 			(keys[pygame.K_w] - keys[pygame.K_s]),
 			(keys[pygame.K_d] - keys[pygame.K_a])))
 
+		#We Use Pymunk Here To Move The Player, This Will Allow Us To Collide With Any Obstacles
 		player_shape.body.apply_impulse_at_local_point(
 			((numpy.cos(numpy.radians(player[PLAYER_ANGLE])) * direction[0] + numpy.cos(numpy.radians(player[PLAYER_ANGLE] + 90)) * direction[1]) * .4,
 			(numpy.sin(numpy.radians(player[PLAYER_ANGLE])) * direction[0] + numpy.sin(numpy.radians(player[PLAYER_ANGLE] + 90)) * direction[1]) * .4))
@@ -387,6 +390,7 @@ while running:
 			
 		rotation += mouse_velocity
 
+		#The Smaller The Value, The Smaller The Bobbing. So If The Value Is 0, The Y-Offset Will Stay At Rest
 		bobbing_strength = lerp(bobbing_strength, ((keys[pygame.K_w] - keys[pygame.K_s]) != 0 or (keys[pygame.K_d] - keys[pygame.K_a]) != 0), .4)
 
 		bobbing += .8
@@ -399,6 +403,9 @@ while running:
 
 		final_bobbing = (numpy.sin(bobbing) / 64) * bobbing_strength
 
+		#We Step 16 Times For Better Collisions, In My Opinion Pymunk Should Not Be Restricted
+		#To Discrete Collisions, And Continous Collisions Would Be Faster Than This Solution,
+		#But It Is What It Is...
 		for i in range(16):
 			space.step(.01)
 
@@ -429,8 +436,6 @@ while running:
 		interpolated_bobbing,
 	)
 
-
-
 	#This Is Where The Magic Happens!
 	scan_line(player, level, buffer)
 	pygame.surfarray.blit_array(screen_surface, buffer)
@@ -444,10 +449,16 @@ while running:
 	buffer.fill(0)
 
 	if should_cap:
-		clock.tick_busy_loop(10) / 1000
+		clock.tick_busy_loop(10)
 	else:
-		clock.tick_busy_loop() / 1000
+		clock.tick_busy_loop()
 
+	#We Increment By The Time It Took To Render & Update Everything
+	#Whenever We Reach 33 Milliseconds (30 FPS), The Game Logic Will Execute
 	update_rate += clock.get_time()
+
+	#Why Not Multiply By Delta Time? Physics Needs To Be Consistent, And Using Delta Time
+	#For Physics Is Not Good Practise, We Also Can Have An Easier Time Implement Logic,
+	#As We Don't Have To Figure Out Different Solutions To Make Something Framerate Independent
 
 pygame.quit()
