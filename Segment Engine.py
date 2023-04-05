@@ -351,6 +351,7 @@ rotation = player[PLAYER_ANGLE]
 update_rate = 0
 
 previous_time = 0
+final_bobbing = 0
 
 while running:
 	keys = pygame.key.get_pressed()
@@ -373,6 +374,7 @@ while running:
 	while update_rate >= 1000 / 30:
 		old_position = player_body.position
 		old_rotation = rotation
+		old_bobbing = final_bobbing
 
 		direction = normalize((
 			(keys[pygame.K_w] - keys[pygame.K_s]),
@@ -384,6 +386,18 @@ while running:
 		player_shape.body.velocity *= .8
 			
 		rotation += mouse_velocity
+
+		bobbing_strength = lerp(bobbing_strength, ((keys[pygame.K_w] - keys[pygame.K_s]) != 0 or (keys[pygame.K_d] - keys[pygame.K_a]) != 0), .4)
+
+		bobbing += .8
+
+		if bobbing > numpy.radians(360):
+			bobbing -= numpy.radians(360)
+
+			if ((keys[pygame.K_w] - keys[pygame.K_s]) != 0 or (keys[pygame.K_d] - keys[pygame.K_a]) != 0):
+				step_sound.play()
+
+		final_bobbing = (numpy.sin(bobbing) / 64) * bobbing_strength
 
 		for i in range(16):
 			space.step(.01)
@@ -399,9 +413,11 @@ while running:
 	if time_between_physics != 0:
 		interpolated_position = (lerp(old_position[0], player_body.position[0], update_rate / time_between_physics), lerp(old_position[1], player_body.position[1], update_rate / time_between_physics))
 		interpolated_rotation = lerp(old_rotation, rotation, update_rate / time_between_physics)
+		interpolated_bobbing = lerp(old_bobbing, final_bobbing, update_rate / time_between_physics)
 	else:
 		interpolated_position = player_body.position
 		interpolated_rotation = rotation
+		interpolated_bobbing = final_bobbing
 
 	player = (
 		interpolated_position,
@@ -410,20 +426,10 @@ while running:
 		player[PLAYER_VISION],
 		player[PLAYER_DISTANCE],
 
-		(numpy.sin(bobbing) / 64) * bobbing_strength
+		interpolated_bobbing,
 	)
 
-	bobbing_strength = lerp(bobbing_strength, ((keys[pygame.K_w] - keys[pygame.K_s]) != 0 or (keys[pygame.K_d] - keys[pygame.K_a]) != 0), 16 * dt)
 
-	#print(time_between_physics)
-
-	bobbing += 16 * dt
-
-	if bobbing > numpy.radians(360):
-		bobbing -= numpy.radians(360)
-
-		if ((keys[pygame.K_w] - keys[pygame.K_s]) != 0 or (keys[pygame.K_d] - keys[pygame.K_a]) != 0):
-			step_sound.play()
 
 	#This Is Where The Magic Happens!
 	scan_line(player, level, buffer)
