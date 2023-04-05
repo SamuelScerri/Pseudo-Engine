@@ -283,7 +283,7 @@ running = True
 #Create Buffer
 buffer = numpy.zeros((screen_surface.get_width(), screen_surface.get_height()), dtype=numpy.int32)
 step_sound = pygame.mixer.Sound("Step.wav")
-step_sound.set_volume(1)
+step_sound.set_volume(.2)
 
 #Create Textures
 basic_wall_1 = pygame.surfarray.array2d(pygame.image.load("texture.png").convert())
@@ -338,6 +338,24 @@ player_shape.mass = 1
 player_shape.friction = 0
 
 space.add(player_body, player_shape)
+dt = 0
+
+MOVEEVENT, t, trail = pygame.USEREVENT+1, 250, []
+pygame.time.set_timer(MOVEEVENT, 16)
+
+old_position = (0, 0)
+
+old_time = 0
+time_between_physics = 0
+
+interpolated_position = (0.0, 0.0)
+interpolated_rotation = 0
+rotation = player[PLAYER_ANGLE]
+
+update_rate = 0
+cap_mode = False
+
+previous_time = 0
 
 while running:
 	keys = pygame.key.get_pressed()
@@ -349,36 +367,54 @@ while running:
 		if event.type == pygame.MOUSEMOTION:
 			mouse_velocity += event.rel[0] * .1
 
+		if event.type == pygame.KEYDOWN:
+			if pygame.key.get_pressed()[pygame.K_SPACE]:
+				if cap_mode:
+					cap_mode = False
+				else: cap_mode = True
 
-	direction = normalize((
-		(keys[pygame.K_w] - keys[pygame.K_s]),
-		(keys[pygame.K_d] - keys[pygame.K_a])))
+		#This Is So That Physics Can Be Seperated From The Game Logic, We Can Also Now Do Interpolation
+	if update_rate >= 1000 / 30:
+		#print("Hell Yeah")
+		old_position = player_body.position
+		old_rotation = rotation
 
+		direction = normalize((
+			(keys[pygame.K_w] - keys[pygame.K_s]),
+			(keys[pygame.K_d] - keys[pygame.K_a])))
 
+		player_shape.body.apply_impulse_at_local_point(
+			((numpy.cos(numpy.radians(player[PLAYER_ANGLE])) * direction[0] + numpy.cos(numpy.radians(player[PLAYER_ANGLE] + 90)) * direction[1]) * .4,
+			(numpy.sin(numpy.radians(player[PLAYER_ANGLE])) * direction[0] + numpy.sin(numpy.radians(player[PLAYER_ANGLE] + 90)) * direction[1]) * .4))
+		player_shape.body.velocity *= .8
+			
+		rotation += mouse_velocity
 
-	#Player Movement (Could Be Improved)
-	#velocity[0] = lerp(velocity[0], (numpy.cos(numpy.radians(player[PLAYER_ANGLE])) * direction[0] + numpy.cos(numpy.radians(player[PLAYER_ANGLE] + 90)) * direction[1]) * .1, .2)
-	#velocity[1] = lerp(velocity[1], (numpy.sin(numpy.radians(player[PLAYER_ANGLE])) * direction[0] + numpy.sin(numpy.radians(player[PLAYER_ANGLE] + 90)) * direction[1]) * .1, .2)
+		for i in range(16):
+			space.step(.01)
 
+		time_between_physics = pygame.time.get_ticks() - old_time
+		old_time = pygame.time.get_ticks()
+		update_rate -= (1000 / 30)
+		mouse_velocity = 0
 
-
-	bobbing_strength = lerp(bobbing_strength, ((keys[pygame.K_w] - keys[pygame.K_s]) != 0 or (keys[pygame.K_d] - keys[pygame.K_a]) != 0), .2)
-
-	old_position = player[PLAYER_POSITION]
+	if time_between_physics != 0:
+		interpolated_position = (lerp(old_position[0], player_body.position[0], update_rate / time_between_physics), lerp(old_position[1], player_body.position[1], update_rate / time_between_physics))
+		interpolated_rotation = lerp(old_rotation, rotation, update_rate / time_between_physics)
 
 	player = (
-		#(player[PLAYER_POSITION][0] + velocity[0],
-		#player[PLAYER_POSITION][1] + velocity[1]),
+		interpolated_position,
+		interpolated_rotation,
 
-		player_body.position,
-
-		player[PLAYER_ANGLE] + mouse_velocity,
 		player[PLAYER_VISION],
 		player[PLAYER_DISTANCE],
+
 		(numpy.sin(bobbing) / 64) * bobbing_strength
 	)
 
-	bobbing += .4
+	bobbing_strength = lerp(bobbing_strength, ((keys[pygame.K_w] - keys[pygame.K_s]) != 0 or (keys[pygame.K_d] - keys[pygame.K_a]) != 0), 16 * dt)
+
+	bobbing += 16 * dt
 
 	if bobbing > numpy.radians(360):
 		bobbing -= numpy.radians(360)
@@ -386,27 +422,24 @@ while running:
 		if ((keys[pygame.K_w] - keys[pygame.K_s]) != 0 or (keys[pygame.K_d] - keys[pygame.K_a]) != 0):
 			step_sound.play()
 
+
 	#This Is Where The Magic Happens!
 	scan_line(player, level, buffer)
-
 	pygame.surfarray.blit_array(screen_surface, buffer)
 	screen_surface.blit(font.render("FPS: " + str(int(clock.get_fps())), False, (255, 255, 255)), (0, 0))
-
-	
-	player_shape.body.apply_impulse_at_local_point(
-		((numpy.cos(numpy.radians(player[PLAYER_ANGLE])) * direction[0] + numpy.cos(numpy.radians(player[PLAYER_ANGLE] + 90)) * direction[1]) * .2,
-		(numpy.sin(numpy.radians(player[PLAYER_ANGLE])) * direction[0] + numpy.sin(numpy.radians(player[PLAYER_ANGLE] + 90)) * direction[1]) * .2))
-	player_shape.body.velocity *= .8
-
-	#space.debug_draw(draw_options)
-
 	pygame.display.flip()
 
 	#This Is Unecessary In Closed Areas
 	buffer.fill(0)
 
-	for i in range(16):
-		space.step(.01)
+	#time_taken = clock.tick_busy_loop()
 
-	clock.tick(60)
-	mouse_velocity = 0
+	difference = pygame.time.get_ticks()
+	dt = (difference - previous_time) / 1000
+
+	update_rate += difference - previous_time
+	
+
+	previous_time = difference
+
+pygame.quit()
