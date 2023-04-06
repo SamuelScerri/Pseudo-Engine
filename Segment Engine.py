@@ -138,6 +138,8 @@ def scan_line(player, level, buffer):
 	interval_angle = player[2] / buffer.shape[0]
 	half_height = buffer.shape[1] / 2
 
+	offset = 0
+
 	for x in range(buffer.shape[0]):
 		#Translate All Points According To Angle
 		translated_angle = numpy.radians((player[PLAYER_ANGLE] - player[PLAYER_VISION] / 2) + interval_angle * x)
@@ -206,10 +208,14 @@ def scan_line(player, level, buffer):
 							floor_length = buffer.shape[1]
 							ceiling_length = 0
 
+							offset = wall_reference[INTERSECTED_WALL][WALL_FLOOR_HEIGHT]
+
 					else:
 						cull_wall = True
 						floor_length = buffer.shape[1]
 						ceiling_length = 0
+
+						offset = wall_reference[INTERSECTED_WALL][WALL_FLOOR_HEIGHT]
 
 				#Here We Will Draw The Walls
 				if cull_wall == False:
@@ -261,6 +267,7 @@ def scan_line(player, level, buffer):
 				#These Are Stored For Later Comparisions
 				previous_floor_height = floor_height
 				previous_ceiling_height = ceiling_height
+	return offset
 
 
 #--------------------------------
@@ -338,10 +345,10 @@ level = (
 )
 
 #Adding The Walls To The Physics Engine
-for wall in level:
-	if wall[WALL_FLOOR_HEIGHT] > 0.1:
-		physics_geometry = pymunk.Body(body_type=pymunk.Body.STATIC)
-		space.add(physics_geometry, pymunk.Segment(physics_geometry, wall[WALL_POINT_A], wall[WALL_POINT_B], .2))
+#for wall in level:
+#	if wall[WALL_FLOOR_HEIGHT] > 0.1:
+#		physics_geometry = pymunk.Body(body_type=pymunk.Body.STATIC)
+#		space.add(physics_geometry, pymunk.Segment(physics_geometry, wall[WALL_POINT_A], wall[WALL_POINT_B], .2))
 
 draw_options = pymunk.pygame_util.DrawOptions(screen_surface)
 
@@ -358,6 +365,8 @@ player_body.position = player[PLAYER_POSITION]
 player_shape = pymunk.Circle(player_body, .2)
 player_shape.mass = 1
 player_shape.friction = 0
+
+offset = 0
 
 space.add(player_body, player_shape)
 dt = 0
@@ -456,11 +465,11 @@ while running:
 		player[PLAYER_VISION],
 		player[PLAYER_DISTANCE],
 
-		interpolated_bobbing,
+		-offset + interpolated_bobbing,
 	)
 
-	#This Is Where The Magic Happens!
-	scan_line(player, level, buffer)
+	#This Is Where The Magic Happens! We Will Also Get The Current Offset Of The Segment That The Player Is On, So That They Will Be Raised Accordingly
+	offset = scan_line(player, level, buffer)
 	pygame.surfarray.blit_array(screen_surface, buffer)
 
 	#screen_surface.blit(font.render("FPS: " + str(int(clock.get_fps())), False, (255, 255, 255)), (0, 0))
