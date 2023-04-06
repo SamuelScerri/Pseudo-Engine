@@ -276,7 +276,7 @@ space.gravity = (0, 0)
 pygame.init()
 pygame.mixer.init()
 
-screen_surface = pygame.display.set_mode((256, 256), pygame.SCALED | pygame.FULLSCREEN, vsync=True)
+screen_surface = pygame.display.set_mode((512, 512), pygame.SCALED | pygame.FULLSCREEN, vsync=True)
 pygame.mouse.set_visible(False)
 pygame.event.set_grab(True)
 
@@ -298,8 +298,8 @@ basic_wall_4 = pygame.surfarray.array2d(pygame.image.load("texture4.png").conver
 player = ((67, 63), 0, 75, 128, 0)
 
 #Create Frame Counter
-clock = pygame.time.Clock()
-font = pygame.font.SysFont("Monospace" , 16 , bold = False)
+#clock = pygame.time.Clock()
+#font = pygame.font.SysFont("Monospace" , 16 , bold = False)
 
 #Level Data, This Is Temporary And Will Instead Load Through External Files In A Later Version
 level = (
@@ -361,7 +361,7 @@ while running:
 			running = False
 
 		if event.type == pygame.MOUSEMOTION:
-			mouse_velocity += event.rel[0] * .1
+			mouse_velocity += event.rel[0] * .05
 
 		if event.type == pygame.KEYDOWN:
 			if pygame.key.get_pressed()[pygame.K_SPACE]:
@@ -409,13 +409,14 @@ while running:
 		for i in range(16):
 			space.step(.01)
 
-		time_between_physics = pygame.time.get_ticks() - old_time
-		old_time = pygame.time.get_ticks()
-
 		#We Don't Reset To Zero In Case The Game Is Running Slow, This Is A Sort Of "Catch-Up"
 		#Where If The Framerate Is 10, Then The Game Logic Will Run 3 More Times
 		update_rate -= (1000 / 30)
 		mouse_velocity = 0
+
+		current_time = pygame.time.get_ticks()
+		time_between_physics = current_time - old_time
+		old_time = current_time
 
 	if time_between_physics != 0:
 		interpolated_position = (lerp(old_position[0], player_body.position[0], update_rate / time_between_physics), lerp(old_position[1], player_body.position[1], update_rate / time_between_physics))
@@ -440,7 +441,7 @@ while running:
 	scan_line(player, level, buffer)
 	pygame.surfarray.blit_array(screen_surface, buffer)
 
-	screen_surface.blit(font.render("FPS: " + str(int(clock.get_fps())), False, (255, 255, 255)), (0, 0))
+	#screen_surface.blit(font.render("FPS: " + str(int(clock.get_fps())), False, (255, 255, 255)), (0, 0))
 	#screen_surface.blit(font.render("Logic Delta: " + str(int(time_between_physics)), False, (255, 255, 255)), (0, 10))
 	pygame.display.flip()
 
@@ -448,17 +449,15 @@ while running:
 	#Implementing Skyboxes
 	buffer.fill(0)
 
-	if should_cap:
-		clock.tick_busy_loop(10)
-	else:
-		clock.tick_busy_loop()
-
 	#We Increment By The Time It Took To Render & Update Everything
 	#Whenever We Reach 33 Milliseconds (30 FPS), The Game Logic Will Execute
-	update_rate += clock.get_time()
+
+	new_time = pygame.time.get_ticks()
+	update_rate += (new_time - previous_time)
 
 	#Why Not Multiply By Delta Time? Physics Needs To Be Consistent, And Using Delta Time
 	#For Physics Is Not Good Practise, We Also Can Have An Easier Time Implement Logic,
 	#As We Don't Have To Figure Out Different Solutions To Make Something Framerate Independent
+	previous_time = new_time
 
 pygame.quit()
