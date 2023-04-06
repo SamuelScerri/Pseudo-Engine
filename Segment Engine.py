@@ -284,7 +284,7 @@ space.gravity = (0, 0)
 pygame.init()
 pygame.mixer.init()
 
-screen_surface = pygame.display.set_mode((512, 512), pygame.SCALED, vsync=True)
+screen_surface = pygame.display.set_mode((512, 512), pygame.SCALED | pygame.FULLSCREEN, vsync=True)
 pygame.mouse.set_visible(False)
 pygame.event.set_grab(True)
 
@@ -304,7 +304,7 @@ basic_wall_4 = pygame.surfarray.array2d(pygame.image.load("texture4.png").conver
 basic_wall_5 = pygame.surfarray.array2d(pygame.image.load("texture5.png").convert())
 
 #Create Player
-player = ((67, 63), 0, 75, 128, 0)
+player = ((66, 69), 0, 75, 128, 0)
 
 #Create Frame Counter
 #clock = pygame.time.Clock()
@@ -342,13 +342,27 @@ level = (
 	((70.0 + offset2, 70.0), (70.5 + offset2, 70.0), 0.3, 0.0, 5, basic_wall_2, basic_wall_3),
 	((70.5 + offset2, 70.0), (70.5 + offset2, 71.0), 0.3, 0.0, 5, basic_wall_2, basic_wall_3),
 	((70.5 + offset2, 71.0), (70.0 + offset2, 71.0), 0.3, 0.0, 5, basic_wall_2, basic_wall_3),
+
+	((71.5, 71.0), (70.0, 71.0), 0.4, 0.0, 6, basic_wall_2, basic_wall_3),
+	((70.0, 71.0), (70.0, 74.0), 0.4, 0.0, 6, basic_wall_2, basic_wall_3),
+	((70.0, 74.0), (71.5, 72.0), 0.4, 0.0, 6, basic_wall_2, basic_wall_3),
+	((71.5, 72.0), (71.5, 71.0), 0.4, 0.0, 6, basic_wall_2, basic_wall_3),
 )
 
+walls_physics_shape_information = []
+walls_physics_body_information = []
+
+offset = 0
+
 #Adding The Walls To The Physics Engine
-#for wall in level:
-#	if wall[WALL_FLOOR_HEIGHT] > 0.1:
-#		physics_geometry = pymunk.Body(body_type=pymunk.Body.STATIC)
-#		space.add(physics_geometry, pymunk.Segment(physics_geometry, wall[WALL_POINT_A], wall[WALL_POINT_B], .2))
+for wall in level:
+	if wall[WALL_FLOOR_HEIGHT] > offset + .1:
+		physics_geometry = pymunk.Body(body_type=pymunk.Body.STATIC)
+		physics_segment = pymunk.Segment(physics_geometry, wall[WALL_POINT_A], wall[WALL_POINT_B], .2)
+
+		space.add(physics_geometry, physics_segment)
+		walls_physics_body_information.append(physics_geometry)
+		walls_physics_shape_information.append(physics_segment)
 
 draw_options = pymunk.pygame_util.DrawOptions(screen_surface)
 
@@ -366,7 +380,7 @@ player_shape = pymunk.Circle(player_body, .2)
 player_shape.mass = 1
 player_shape.friction = 0
 
-offset = 0
+
 
 space.add(player_body, player_shape)
 dt = 0
@@ -381,6 +395,9 @@ update_rate = 0
 
 previous_time = 0
 final_bobbing = 0
+current_offset = 0
+gravity_velocity = 0
+should_jump = False
 
 while running:
 	keys = pygame.key.get_pressed()
@@ -394,10 +411,7 @@ while running:
 
 		if event.type == pygame.KEYDOWN:
 			if pygame.key.get_pressed()[pygame.K_SPACE]:
-				if should_cap:
-					should_cap = False
-				else:
-					should_cap = True
+				should_jump = True
 
 	#print(player_body.position)
 
@@ -406,6 +420,18 @@ while running:
 		old_position = player_body.position
 		old_rotation = rotation
 		old_bobbing = final_bobbing
+
+		if should_jump and current_offset == offset:
+			gravity_velocity = .12
+			should_jump = False
+
+		gravity_velocity -= .02
+		current_offset += gravity_velocity
+
+		if current_offset < offset:
+			current_offset = offset
+			gravity_velocity = 0
+
 
 		#Direction Here Is Normalized For Diagonal Movement,
 		#Without It Diagonal Movement Will Be Faster
@@ -432,13 +458,29 @@ while running:
 			if ((keys[pygame.K_w] - keys[pygame.K_s]) != 0 or (keys[pygame.K_d] - keys[pygame.K_a]) != 0):
 				step_sound.play()
 
-		final_bobbing = (numpy.sin(bobbing) / 64) * bobbing_strength
+		final_bobbing = -current_offset + (numpy.sin(bobbing) / 64) * bobbing_strength
 
 		#We Step 16 Times For Better Collisions, In My Opinion Pymunk Should Not Be Restricted
 		#To Discrete Collisions, And Continous Collisions Would Be Faster Than This Solution,
 		#But It Is What It Is...
 		for i in range(16):
 			space.step(.01)
+
+		if len(walls_physics_body_information) > 0:
+			for i in range(len(walls_physics_body_information)):
+				space.remove(walls_physics_body_information[i], walls_physics_shape_information[i])
+
+			walls_physics_body_information.clear()
+			walls_physics_shape_information.clear()
+
+		for wall in level:
+			if wall[WALL_FLOOR_HEIGHT] > current_offset + .2 or wall[WALL_CEILING_HEIGHT] > .2:
+				physics_geometry = pymunk.Body(body_type=pymunk.Body.STATIC)
+				physics_segment = pymunk.Segment(physics_geometry, wall[WALL_POINT_A], wall[WALL_POINT_B], .2)
+
+				space.add(physics_geometry, physics_segment)
+				walls_physics_body_information.append(physics_geometry)
+				walls_physics_shape_information.append(physics_segment)
 
 		#We Don't Reset To Zero In Case The Game Is Running Slow, This Is A Sort Of "Catch-Up"
 		#Where If The Framerate Is 10, Then The Game Logic Will Run 3 More Times
@@ -465,8 +507,10 @@ while running:
 		player[PLAYER_VISION],
 		player[PLAYER_DISTANCE],
 
-		-offset + interpolated_bobbing,
+		interpolated_bobbing,
 	)
+
+	#print(player_body.position)
 
 	#This Is Where The Magic Happens! We Will Also Get The Current Offset Of The Segment That The Player Is On, So That They Will Be Raised Accordingly
 	offset = scan_line(player, level, buffer)
