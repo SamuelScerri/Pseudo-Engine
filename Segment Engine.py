@@ -106,28 +106,29 @@ def get_closest_wall(position, translated_point, level):
 			if all_walls_intersected[j][0] > all_walls_intersected[j + 1][0]:
 				all_walls_intersected[j], all_walls_intersected[j + 1] = all_walls_intersected[j + 1], all_walls_intersected[j]
 
+	segmented_order = []
+
 	#This Will Order By Segments
-	#Not Entirely Happy With This Algorithm But It Works
-	if len(all_walls_intersected) > 0:
-		single_value = -1
-		found = False
+	#We Are Going To Loop Backwards Here
+	while len(all_walls_intersected) != 0:
+		#print(len(all_walls_intersected))
+		#current_wall_checked = all_walls_intersected.pop(len(all_walls_intersected) - 1)
 
-		#Here The Walls Are Ordered By Segments
-		for i in range(1, len(all_walls_intersected)):
-			found = False
+		walls_obtained = [len(all_walls_intersected) - 1]
+		offset = 0
 
-			for j in range(i, len(all_walls_intersected)):
-				if all_walls_intersected[i - 1][INTERSECTED_WALL][WALL_SEGMENT] == all_walls_intersected[j][INTERSECTED_WALL][WALL_SEGMENT]:
-					found = True
-					all_walls_intersected[i], all_walls_intersected[j] = all_walls_intersected[j], all_walls_intersected[i]
+		segmented_order.insert(0, all_walls_intersected[len(all_walls_intersected) - 1])
 
-			if single_value == -1 and not found:
-				single_value = i
+		#Find Any Other Wall With The Same Segment
+		for i in range(len(all_walls_intersected) - 2, -1, -1):
+			if all_walls_intersected[i][INTERSECTED_WALL][WALL_SEGMENT] == all_walls_intersected[len(all_walls_intersected) - 1][INTERSECTED_WALL][WALL_SEGMENT]:
+				segmented_order.insert(0, all_walls_intersected[i])
+				walls_obtained.append(i)
 
-		if found == False:
-			all_walls_intersected.insert(0, all_walls_intersected.pop(single_value))
+		for index in sorted(walls_obtained, reverse=True):
+			del all_walls_intersected[index]
 
-	return all_walls_intersected
+	return segmented_order
 
 
 #Scan The Entire Screen From Left To Right & Render The Walls & Floors
@@ -276,7 +277,7 @@ space.gravity = (0, 0)
 pygame.init()
 pygame.mixer.init()
 
-screen_surface = pygame.display.set_mode((512, 512), pygame.SCALED | pygame.FULLSCREEN, vsync=True)
+screen_surface = pygame.display.set_mode((512, 512), pygame.SCALED, vsync=True)
 pygame.mouse.set_visible(False)
 pygame.event.set_grab(True)
 
@@ -293,6 +294,7 @@ basic_wall_1 = pygame.surfarray.array2d(pygame.image.load("texture.png").convert
 basic_wall_2 = pygame.surfarray.array2d(pygame.image.load("texture2.png").convert())
 basic_wall_3 = pygame.surfarray.array2d(pygame.image.load("texture3.png").convert())
 basic_wall_4 = pygame.surfarray.array2d(pygame.image.load("texture4.png").convert())
+basic_wall_5 = pygame.surfarray.array2d(pygame.image.load("texture5.png").convert())
 
 #Create Player
 player = ((67, 63), 0, 75, 128, 0)
@@ -301,25 +303,43 @@ player = ((67, 63), 0, 75, 128, 0)
 #clock = pygame.time.Clock()
 #font = pygame.font.SysFont("Monospace" , 16 , bold = False)
 
+offset = .5
+offset2 = 1
+
 #Level Data, This Is Temporary And Will Instead Load Through External Files In A Later Version
 level = (
-	((64, 71), (70, 71), 0.6, 0.0, 0, basic_wall_1, basic_wall_2),
-	((70, 71), (70, 77), 0.6, 0.0, 0, basic_wall_1, basic_wall_2),
-	((64, 71), (70, 77), 0.6, 0.0, 0, basic_wall_1, basic_wall_2),
+	((64.0, 71.0), (70.0, 71.0), 0.6, 0.0, 0, basic_wall_1, basic_wall_2),
+	((70.0, 71.0), (70.0, 77.0), 0.6, 0.0, 0, basic_wall_1, basic_wall_2),
+	((64.0, 71.0), (70.0, 77.0), 0.6, 0.0, 0, basic_wall_1, basic_wall_2),
 
-	((64, 64), (64, 71), 0.0, 0.2, 2, basic_wall_4, basic_wall_4),
-	((64, 71), (70, 71), 0.0, 0.2, 2, basic_wall_4, basic_wall_4),
-	((70, 71), (70, 70), 0.0, 0.2, 2, basic_wall_4, basic_wall_4),
-	((70, 70), (64, 64), 0.0, 0.2, 2, basic_wall_4, basic_wall_4),
+	((64.0, 64.0), (70.0, 64.0), 0.2, 0.6, 1, basic_wall_2, basic_wall_3),
+	((70.0, 64.0), (70.0, 70.0), 0.2, 0.6, 1, basic_wall_2, basic_wall_3),
+	((64.0, 64.0), (70.0, 70.0), 0.2, 0.6, 1, basic_wall_2, basic_wall_3),
 
-	((64, 64), (70, 64), 0.2, 0.6, 1, basic_wall_2, basic_wall_3),
-	((70, 64), (70, 70), 0.2, 0.6, 1, basic_wall_2, basic_wall_3),
-	((64, 64), (70, 70), 0.2, 0.6, 1, basic_wall_2, basic_wall_3),
+	((64.0, 64.0), (64.0, 71.0), 0.0, 0.2, 2, basic_wall_4, basic_wall_4),
+	((64.0, 71.0), (70.0, 71.0), 0.0, 0.2, 2, basic_wall_4, basic_wall_4),
+	((70.0, 71.0), (70.0, 70.0), 0.0, 0.2, 2, basic_wall_4, basic_wall_4),
+	((70.0, 70.0), (64.0, 64.0), 0.0, 0.2, 2, basic_wall_4, basic_wall_4),
+
+	((70.0, 71.0), (70.0, 70.0), 0.1, 0.0, 3, basic_wall_2, basic_wall_3),
+	((70.0, 70.0), (70.5, 70.0), 0.1, 0.0, 3, basic_wall_2, basic_wall_3),
+	((70.5, 70.0), (70.5, 71.0), 0.1, 0.0, 3, basic_wall_2, basic_wall_3),
+	((70.5, 71.0), (70.0, 71.0), 0.1, 0.0, 3, basic_wall_2, basic_wall_3),
+
+	((70.0 + offset, 71.0), (70.0 + offset, 70.0), 0.2, 0.0, 4, basic_wall_2, basic_wall_3),
+	((70.0 + offset, 70.0), (70.5 + offset, 70.0), 0.2, 0.0, 4, basic_wall_2, basic_wall_3),
+	((70.5 + offset, 70.0), (70.5 + offset, 71.0), 0.2, 0.0, 4, basic_wall_2, basic_wall_3),
+	((70.5 + offset, 71.0), (70.0 + offset, 71.0), 0.2, 0.0, 4, basic_wall_2, basic_wall_3),
+
+	((70.0 + offset2, 71.0), (70.0 + offset2, 70.0), 0.3, 0.0, 5, basic_wall_2, basic_wall_3),
+	((70.0 + offset2, 70.0), (70.5 + offset2, 70.0), 0.3, 0.0, 5, basic_wall_2, basic_wall_3),
+	((70.5 + offset2, 70.0), (70.5 + offset2, 71.0), 0.3, 0.0, 5, basic_wall_2, basic_wall_3),
+	((70.5 + offset2, 71.0), (70.0 + offset2, 71.0), 0.3, 0.0, 5, basic_wall_2, basic_wall_3),
 )
 
 #Adding The Walls To The Physics Engine
 for wall in level:
-	if wall[WALL_FLOOR_HEIGHT] > 0:
+	if wall[WALL_FLOOR_HEIGHT] > 0.1:
 		physics_geometry = pymunk.Body(body_type=pymunk.Body.STATIC)
 		space.add(physics_geometry, pymunk.Segment(physics_geometry, wall[WALL_POINT_A], wall[WALL_POINT_B], .2))
 
@@ -369,6 +389,8 @@ while running:
 					should_cap = False
 				else:
 					should_cap = True
+
+	#print(player_body.position)
 
 	#This Is So That Game Logic Will Not Be Tied To The Rendering Speed, We Can Also Now Do Interpolation
 	while update_rate >= 1000 / 30:
