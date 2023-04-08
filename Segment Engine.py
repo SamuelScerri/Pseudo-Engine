@@ -284,7 +284,7 @@ space.gravity = (0, 0)
 pygame.init()
 pygame.mixer.init()
 
-screen_surface = pygame.display.set_mode((512, 512), pygame.SCALED | pygame.FULLSCREEN, vsync=True)
+screen_surface = pygame.display.set_mode((512, 512), pygame.SCALED, vsync=True)
 pygame.mouse.set_visible(False)
 pygame.event.set_grab(True)
 
@@ -303,12 +303,14 @@ basic_wall_3 = pygame.surfarray.array2d(pygame.image.load("texture3.png").conver
 basic_wall_4 = pygame.surfarray.array2d(pygame.image.load("texture4.png").convert())
 basic_wall_5 = pygame.surfarray.array2d(pygame.image.load("texture5.png").convert())
 
+tree_thing = pygame.image.load("tree.png").convert()
+
 #Create Player
 player = ((66, 69), 0, 75, 128, 0)
 
 #Create Frame Counter
 #clock = pygame.time.Clock()
-#font = pygame.font.SysFont("Monospace" , 16 , bold = False)
+font = pygame.font.SysFont("Monospace" , 16 , bold = False)
 
 offset = .5
 offset2 = 1
@@ -380,7 +382,7 @@ player_shape = pymunk.Circle(player_body, .2)
 player_shape.mass = 1
 player_shape.friction = 0
 
-
+fps = 0
 
 space.add(player_body, player_shape)
 dt = 0
@@ -407,7 +409,7 @@ while running:
 			running = False
 
 		if event.type == pygame.MOUSEMOTION:
-			mouse_velocity += event.rel[0] * .05
+			mouse_velocity += event.rel[0] * .1
 
 		if event.type == pygame.KEYDOWN:
 			if pygame.key.get_pressed()[pygame.K_SPACE]:
@@ -421,16 +423,18 @@ while running:
 		old_rotation = rotation
 		old_bobbing = final_bobbing
 
-		if should_jump and current_offset == offset:
-			gravity_velocity = .12
-			should_jump = False
+		current_offset = offset
 
-		gravity_velocity -= .02
-		current_offset += gravity_velocity
+		#if should_jump and current_offset == offset:
+		#	gravity_velocity = .12
+		#	should_jump = False
 
-		if current_offset < offset:
-			current_offset = offset
-			gravity_velocity = 0
+		#gravity_velocity -= .02
+		#current_offset += gravity_velocity
+
+		#if current_offset < offset:
+			#current_offset = offset
+			#gravity_velocity = 0
 
 
 		#Direction Here Is Normalized For Diagonal Movement,
@@ -516,7 +520,40 @@ while running:
 	offset = scan_line(player, level, buffer)
 	pygame.surfarray.blit_array(screen_surface, buffer)
 
-	#screen_surface.blit(font.render("FPS: " + str(int(clock.get_fps())), False, (255, 255, 255)), (0, 0))
+	screen_surface.blit(font.render("FPS: " + str(int(fps)), False, (255, 255, 255)), (0, 0))
+	#print(interpolated_rotation)
+
+	#Translate Position
+	dx = 66 - interpolated_position[0]
+	dy = 70 - interpolated_position[1]
+
+	dist = numpy.sqrt(dx * dx + dy * dy)
+
+	#dist = numpy.sqrt(dx * dx + dy * dy)
+	theta = numpy.degrees(numpy.arctan2(-dy, dx))
+	#if theta < 0:
+	#	theta += 360
+	interpolated_rotation %= 360
+
+	y = (-interpolated_rotation + (player[PLAYER_VISION] / 2) - theta)
+
+	if y < -180:
+		y += 360
+
+	#if -interpolated_rotation > 270 and theta < 90:
+	#	y += 360
+	#if theta > 270 and -interpolated_rotation < 90:
+	#	y -= 360
+
+	x = y * (512 / player[PLAYER_VISION])
+	tree_height = (256 / dist)
+
+	sized_thing = pygame.transform.scale(tree_thing, (tree_height, tree_height))
+
+	screen_surface.blit(sized_thing, (x - sized_thing.get_width() / 2, 256))
+
+	#print(x)
+
 	#screen_surface.blit(font.render("Logic Delta: " + str(int(time_between_physics)), False, (255, 255, 255)), (0, 10))
 	pygame.display.flip()
 
@@ -529,6 +566,7 @@ while running:
 
 	new_time = pygame.time.get_ticks()
 	update_rate += (new_time - previous_time)
+	fps = 1 / ((new_time - previous_time) / 1000)
 
 	#Why Not Multiply By Delta Time? Physics Needs To Be Consistent, And Using Delta Time
 	#For Physics Is Not Good Practise, We Also Can Have An Easier Time Implement Logic,
