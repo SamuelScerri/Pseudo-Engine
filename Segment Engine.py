@@ -281,10 +281,14 @@ def scan_line(player, level, buffer, tree_thing):
 		y += 360
 	x = y * (512 / player[PLAYER_VISION])
 	sprite_height = (256 / dist)
+	darkness = clamp_in_order(lerp(0, 1, 1 / dist), 0, 1)
 
-	for x_loop in range(clamp_in_order(x - sprite_height, 0, buffer.shape[0]), clamp_in_order(x + sprite_height, 0, buffer.shape[0])):
-		for y_loop in range(clamp_in_order(half_height - sprite_height, 0, buffer.shape[1]), clamp_in_order(half_height + sprite_height, 0, buffer.shape[1])):
-			buffer[x_loop, y_loop] = tree_thing[int((x_loop - (x + sprite_height)) / sprite_height * 32), int((y_loop - (half_height + sprite_height)) / sprite_height * 32)]
+	for x_loop in range(clamp_in_order(x - sprite_height + 1, 0, buffer.shape[0]), clamp_in_order(x + sprite_height, 0, buffer.shape[0])):
+		for y_loop in range(clamp_in_order(half_height - sprite_height + 1, 0, buffer.shape[1]), clamp_in_order(half_height + sprite_height, 0, buffer.shape[1])):
+			if tree_thing[int((x_loop - (x + sprite_height)) / sprite_height * 32), int((y_loop - (half_height + sprite_height)) / sprite_height * 32)] != 9357180:
+				color_value = convert_int_rgb(tree_thing[int((x_loop - (x + sprite_height)) / sprite_height * 32), int((y_loop - (half_height + sprite_height)) / sprite_height * 32)])
+
+				buffer[x_loop, y_loop] = mix(color_value, (darkness, darkness, darkness))
 
 	return offset
 
@@ -323,6 +327,7 @@ basic_wall_4 = pygame.surfarray.array2d(pygame.image.load("texture4.png").conver
 basic_wall_5 = pygame.surfarray.array2d(pygame.image.load("texture5.png").convert())
 
 tree_thing = pygame.surfarray.array2d(pygame.image.load("tree.png").convert())
+print(tree_thing)
 
 #Create Player
 player = ((66, 69), 0, 75, 128, 0)
