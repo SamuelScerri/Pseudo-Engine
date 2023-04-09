@@ -18,8 +18,9 @@ How To Run:
 
 Showcase:
 -
-![Showcase 1](https://user-images.githubusercontent.com/92179479/229337773-45b9b1b9-4480-4f46-b3e5-60ca6500334a.png)
-![Showcase 2](https://user-images.githubusercontent.com/92179479/229337778-a0a8b2bd-2725-43f9-9e0f-1e0167e756f8.png)
+![Showcase 5](https://user-images.githubusercontent.com/92179479/230763175-1722ba5d-22a6-4877-a45c-b18ae7d43e5e.png)
+![Showcase 6](https://user-images.githubusercontent.com/92179479/230763177-88873a5d-35e3-4190-a2c5-2b0f3fbb7125.png)
+![Showcase 7](https://user-images.githubusercontent.com/92179479/230763209-62a944e3-baf9-4a55-9804-b076ea5ce744.png)
 
 Known Issues:
 -
