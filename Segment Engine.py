@@ -133,7 +133,7 @@ def get_closest_wall(position, translated_point, level):
 
 #Scan The Entire Screen From Left To Right & Render The Walls & Floors
 @numba.jit(nopython=True, nogil=True, cache=True, fastmath=True)
-def scan_line(player, level, buffer):
+def scan_line(player, level, buffer, tree_thing):
 	#Obtain The Interval Angle To Rotate Correctly
 	interval_angle = player[2] / buffer.shape[0]
 	half_height = buffer.shape[1] / 2
@@ -267,6 +267,25 @@ def scan_line(player, level, buffer):
 				#These Are Stored For Later Comparisions
 				previous_floor_height = floor_height
 				previous_ceiling_height = ceiling_height
+
+	dx = 66 - player[PLAYER_POSITION][0]
+	dy = 70 - player[PLAYER_POSITION][1]
+
+	dist = numpy.sqrt(dx * dx + dy * dy)
+	theta = numpy.degrees(numpy.arctan2(-dy, dx))
+	fixed_rotation = player[PLAYER_ANGLE] % 360
+
+	y = (-fixed_rotation + (player[PLAYER_VISION] / 2) - theta)
+
+	if y < -180:
+		y += 360
+	x = y * (512 / player[PLAYER_VISION])
+	sprite_height = (256 / dist)
+
+	for x_loop in range(clamp_in_order(x - sprite_height, 0, buffer.shape[0]), clamp_in_order(x + sprite_height, 0, buffer.shape[0])):
+		for y_loop in range(clamp_in_order(half_height - sprite_height, 0, buffer.shape[1]), clamp_in_order(half_height + sprite_height, 0, buffer.shape[1])):
+			buffer[x_loop, y_loop] = tree_thing[int((x_loop - (x + sprite_height)) / sprite_height * 32), int((y_loop - (half_height + sprite_height)) / sprite_height * 32)]
+
 	return offset
 
 
@@ -284,7 +303,7 @@ space.gravity = (0, 0)
 pygame.init()
 pygame.mixer.init()
 
-screen_surface = pygame.display.set_mode((512, 512), pygame.SCALED, vsync=True)
+screen_surface = pygame.display.set_mode((512, 512), pygame.SCALED | pygame.FULLSCREEN, vsync=True)
 pygame.mouse.set_visible(False)
 pygame.event.set_grab(True)
 
@@ -303,7 +322,7 @@ basic_wall_3 = pygame.surfarray.array2d(pygame.image.load("texture3.png").conver
 basic_wall_4 = pygame.surfarray.array2d(pygame.image.load("texture4.png").convert())
 basic_wall_5 = pygame.surfarray.array2d(pygame.image.load("texture5.png").convert())
 
-tree_thing = pygame.image.load("tree.png").convert()
+tree_thing = pygame.surfarray.array2d(pygame.image.load("tree.png").convert())
 
 #Create Player
 player = ((66, 69), 0, 75, 128, 0)
@@ -517,44 +536,32 @@ while running:
 	#print(player_body.position)
 
 	#This Is Where The Magic Happens! We Will Also Get The Current Offset Of The Segment That The Player Is On, So That They Will Be Raised Accordingly
-	offset = scan_line(player, level, buffer)
+	offset = scan_line(player, level, buffer, tree_thing)
 	pygame.surfarray.blit_array(screen_surface, buffer)
 
 	screen_surface.blit(font.render("FPS: " + str(int(fps)), False, (255, 255, 255)), (0, 0))
 	#print(interpolated_rotation)
 
 	#Translate Position
-	dx = 66 - interpolated_position[0]
-	dy = 70 - interpolated_position[1]
-
-	dist = numpy.sqrt(dx * dx + dy * dy)
+	#dx = 66 - interpolated_position[0]
+	#dy = 70 - interpolated_position[1]
 
 	#dist = numpy.sqrt(dx * dx + dy * dy)
-	theta = numpy.degrees(numpy.arctan2(-dy, dx))
-	#if theta < 0:
-	#	theta += 360
-	interpolated_rotation %= 360
 
-	y = (-interpolated_rotation + (player[PLAYER_VISION] / 2) - theta)
+	#dist = numpy.sqrt(dx * dx + dy * dy)
+	#theta = numpy.degrees(numpy.arctan2(-dy, dx))
+	#interpolated_rotation %= 360
 
-	if y < -180:
-		y += 360
+	#y = (-interpolated_rotation + (player[PLAYER_VISION] / 2) - theta)
 
-	#if -interpolated_rotation > 270 and theta < 90:
+	#if y < -180:
 	#	y += 360
-	#if theta > 270 and -interpolated_rotation < 90:
-	#	y -= 360
+	#x = y * (512 / player[PLAYER_VISION])
+	#tree_height = (256 / dist)
 
-	x = y * (512 / player[PLAYER_VISION])
-	tree_height = (256 / dist)
+	#sized_thing = pygame.transform.scale(tree_thing, (tree_height, tree_height))
 
-	sized_thing = pygame.transform.scale(tree_thing, (tree_height, tree_height))
-
-	screen_surface.blit(sized_thing, (x - sized_thing.get_width() / 2, 256))
-
-	#print(x)
-
-	#screen_surface.blit(font.render("Logic Delta: " + str(int(time_between_physics)), False, (255, 255, 255)), (0, 10))
+	#screen_surface.blit(sized_thing, (x - sized_thing.get_width() / 2, 256))
 	pygame.display.flip()
 
 	#This Is Unecessary In Closed Areas, But Performance Seems To Be Very Minimal, Might Be Removed After
