@@ -141,6 +141,9 @@ def scan_line(player, level, buffer, tree_thing):
 	offset = 0
 
 	for x in range(buffer.shape[0]):
+		final_position = (0, 0, 0, 0)
+		found = False
+
 		#Translate All Points According To Angle
 		translated_angle = numpy.radians((player[PLAYER_ANGLE] - player[PLAYER_VISION] / 2) + interval_angle * x)
 
@@ -277,31 +280,46 @@ def scan_line(player, level, buffer, tree_thing):
 				if y < -180:
 					y += 360
 			
-				x_pos = y * (512 / player[PLAYER_VISION])
-				sprite_height = (256 / dist)
+				x_pos = y * (buffer.shape[0] / player[PLAYER_VISION])
+				sprite_height = (half_height / dist)
 				darkness = clamp_in_order(lerp(0, 1, 1 / dist), 0, 1)
 
 				if x > x_pos - sprite_height and x < x_pos + sprite_height:
 					if dist < intersected_walls[wall][INTERSECTED_DISTANCE]:
 						if wall == 0:
-							#This Means That The Object Is Directly In Front Of The Player
-							for y_loop in range(clamp_in_order(half_height - sprite_height + 1, 0, buffer.shape[1]), clamp_in_order(half_height + sprite_height, 0, buffer.shape[1])):
-								if tree_thing[int((x - (x_pos + sprite_height)) / sprite_height * 32), int((y_loop - (half_height + sprite_height)) / sprite_height * 32)] != 9357180:
-									color_value = convert_int_rgb(tree_thing[int((x - (x_pos + sprite_height)) / sprite_height * 32), int((y_loop - (half_height + sprite_height)) / sprite_height * 32)])
-									buffer[x, y_loop] = mix(color_value, (darkness, darkness, darkness))			
+							if not found:
+								final_position = (clamp_in_order(half_height - sprite_height + 1, 0, buffer.shape[1]), clamp_in_order(half_height + sprite_height, 0, buffer.shape[1]), sprite_height, x_pos)
+								found = True
 
-						else:
-							#If It Isn't In Front Of The Player, We Will Draw It Behind The Other Walls
-							for y_loop in range(clamp_in_order(half_height - sprite_height + 1, previous_ceiling_height[1], previous_floor_height[0]), clamp_in_order(half_height + sprite_height, previous_ceiling_height[1], previous_floor_height[0])):
-								if tree_thing[int((x - (x_pos + sprite_height)) / sprite_height * 32), int((y_loop - (half_height + sprite_height)) / sprite_height * 32)] != 9357180:
-									color_value = convert_int_rgb(tree_thing[int((x - (x_pos + sprite_height)) / sprite_height * 32), int((y_loop - (half_height + sprite_height)) / sprite_height * 32)])
-									buffer[x, y_loop] = mix(color_value, (darkness, darkness, darkness))
+						elif dist > intersected_walls[wall - 1][INTERSECTED_DISTANCE]:
+							if not found:
+								final_position = (clamp_in_order(half_height - sprite_height + 1, previous_ceiling_height[1], previous_floor_height[0]), clamp_in_order(half_height + sprite_height, previous_ceiling_height[1], previous_floor_height[0]), sprite_height, x_pos)
+								found = True
+
+							#This Means That The Object Is Directly In Front Of The Player
+							#for y_loop in range(clamp_in_order(half_height - sprite_height + 1, 0, buffer.shape[1]), clamp_in_order(half_height + sprite_height, 0, buffer.shape[1])):
+							#	if tree_thing[int((x - (x_pos + sprite_height)) / sprite_height * 32), int((y_loop - (half_height + sprite_height)) / sprite_height * 32)] != 9357180:
+							#		color_value = convert_int_rgb(tree_thing[int((x - (x_pos + sprite_height)) / sprite_height * 32), int((y_loop - (half_height + sprite_height)) / sprite_height * 32)])
+							#		buffer[x, y_loop] = mix(color_value, (darkness, darkness, darkness))			
+
+					#	else:
+					#		#If It Isn't In Front Of The Player, We Will Draw It Behind The Other Walls
+					#		for y_loop in range(clamp_in_order(half_height - sprite_height + 1, previous_ceiling_height[1], previous_floor_height[0]), clamp_in_order(half_height + sprite_height, previous_ceiling_height[1], previous_floor_height[0])):
+					#			if tree_thing[int((x - (x_pos + sprite_height)) / sprite_height * 32), int((y_loop - (half_height + sprite_height)) / sprite_height * 32)] != 9357180:
+					#				color_value = convert_int_rgb(tree_thing[int((x - (x_pos + sprite_height)) / sprite_height * 32), int((y_loop - (half_height + sprite_height)) / sprite_height * 32)])
+					#				buffer[x, y_loop] = mix(color_value, (darkness, darkness, darkness))
 
 
 
 				#These Are Stored For Later Comparisions
 				previous_floor_height = floor_height
 				previous_ceiling_height = ceiling_height
+
+		#We Will Draw The Sprites Here As Overlays
+		for y_loop in range(final_position[0], final_position[1]):
+			if tree_thing[int((x - (final_position[3] + final_position[2])) / final_position[2] * 32), int((y_loop - (half_height + final_position[2])) / final_position[2] * 32)] != 9357180:
+				color_value = convert_int_rgb(tree_thing[int((x - (final_position[3] + final_position[2])) / final_position[2] * 32), int((y_loop - (half_height + final_position[2])) / final_position[2] * 32)])
+				buffer[x, y_loop] = mix(color_value, (darkness, darkness, darkness))		
 
 	return offset
 
@@ -320,7 +338,7 @@ space.gravity = (0, 0)
 pygame.init()
 pygame.mixer.init()
 
-screen_surface = pygame.display.set_mode((512, 512), pygame.SCALED | pygame.FULLSCREEN, vsync=True)
+screen_surface = pygame.display.set_mode((256, 256), pygame.SCALED, vsync=False)
 pygame.mouse.set_visible(False)
 pygame.event.set_grab(True)
 
