@@ -288,28 +288,13 @@ def scan_line(player, level, buffer, tree_thing):
 					if dist < intersected_walls[wall][INTERSECTED_DISTANCE]:
 						if wall == 0:
 							if not found:
-								final_position = (clamp_in_order(half_height - sprite_height + 1, 0, buffer.shape[1]), clamp_in_order(half_height + sprite_height, 0, buffer.shape[1]), sprite_height, x_pos)
+								final_position = (clamp_in_order((half_height - sprite_height) + 2 * sprite_height * (-player[PLAYER_OFFSET]), 0, buffer.shape[1]), clamp_in_order((half_height + sprite_height) - 2 * sprite_height * (player[PLAYER_OFFSET]), 0, buffer.shape[1]), sprite_height, x_pos)
 								found = True
 
 						elif dist > intersected_walls[wall - 1][INTERSECTED_DISTANCE]:
 							if not found:
-								final_position = (clamp_in_order(half_height - sprite_height + 1, previous_ceiling_height[1], previous_floor_height[0]), clamp_in_order(half_height + sprite_height, previous_ceiling_height[1], previous_floor_height[0]), sprite_height, x_pos)
+								final_position = (clamp_in_order((half_height - sprite_height) + 2 * sprite_height * (-player[PLAYER_OFFSET]), previous_ceiling_height[1], previous_floor_height[0]), clamp_in_order((half_height + sprite_height) - 2 * sprite_height * (player[PLAYER_OFFSET]), previous_ceiling_height[1], previous_floor_height[0]), sprite_height, x_pos)
 								found = True
-
-							#This Means That The Object Is Directly In Front Of The Player
-							#for y_loop in range(clamp_in_order(half_height - sprite_height + 1, 0, buffer.shape[1]), clamp_in_order(half_height + sprite_height, 0, buffer.shape[1])):
-							#	if tree_thing[int((x - (x_pos + sprite_height)) / sprite_height * 32), int((y_loop - (half_height + sprite_height)) / sprite_height * 32)] != 9357180:
-							#		color_value = convert_int_rgb(tree_thing[int((x - (x_pos + sprite_height)) / sprite_height * 32), int((y_loop - (half_height + sprite_height)) / sprite_height * 32)])
-							#		buffer[x, y_loop] = mix(color_value, (darkness, darkness, darkness))			
-
-					#	else:
-					#		#If It Isn't In Front Of The Player, We Will Draw It Behind The Other Walls
-					#		for y_loop in range(clamp_in_order(half_height - sprite_height + 1, previous_ceiling_height[1], previous_floor_height[0]), clamp_in_order(half_height + sprite_height, previous_ceiling_height[1], previous_floor_height[0])):
-					#			if tree_thing[int((x - (x_pos + sprite_height)) / sprite_height * 32), int((y_loop - (half_height + sprite_height)) / sprite_height * 32)] != 9357180:
-					#				color_value = convert_int_rgb(tree_thing[int((x - (x_pos + sprite_height)) / sprite_height * 32), int((y_loop - (half_height + sprite_height)) / sprite_height * 32)])
-					#				buffer[x, y_loop] = mix(color_value, (darkness, darkness, darkness))
-
-
 
 				#These Are Stored For Later Comparisions
 				previous_floor_height = floor_height
@@ -317,8 +302,8 @@ def scan_line(player, level, buffer, tree_thing):
 
 		#We Will Draw The Sprites Here As Overlays
 		for y_loop in range(final_position[0], final_position[1]):
-			if tree_thing[int((x - (final_position[3] + final_position[2])) / final_position[2] * 32), int((y_loop - (half_height + final_position[2])) / final_position[2] * 32)] != 9357180:
-				color_value = convert_int_rgb(tree_thing[int((x - (final_position[3] + final_position[2])) / final_position[2] * 32), int((y_loop - (half_height + final_position[2])) / final_position[2] * 32)])
+			if tree_thing[int((x - (final_position[3] + final_position[2])) / final_position[2] * 32), int((y_loop - ((half_height + final_position[2]) - 2 * final_position[2] * player[PLAYER_OFFSET])) / final_position[2] * 32)] != 9357180:
+				color_value = convert_int_rgb(tree_thing[int((x - (final_position[3] + final_position[2])) / final_position[2] * 32), int((y_loop - ((half_height + final_position[2]) - 2 * final_position[2] * player[PLAYER_OFFSET])) / final_position[2] * 32)])
 				buffer[x, y_loop] = mix(color_value, (darkness, darkness, darkness))		
 
 	return offset
@@ -338,7 +323,7 @@ space.gravity = (0, 0)
 pygame.init()
 pygame.mixer.init()
 
-screen_surface = pygame.display.set_mode((256, 256), pygame.SCALED, vsync=False)
+screen_surface = pygame.display.set_mode((512, 512), pygame.SCALED | pygame.FULLSCREEN, vsync=True)
 pygame.mouse.set_visible(False)
 pygame.event.set_grab(True)
 
@@ -358,7 +343,6 @@ basic_wall_4 = pygame.surfarray.array2d(pygame.image.load("texture4.png").conver
 basic_wall_5 = pygame.surfarray.array2d(pygame.image.load("texture5.png").convert())
 
 tree_thing = pygame.surfarray.array2d(pygame.image.load("tree.png").convert())
-print(tree_thing)
 
 #Create Player
 player = ((66, 69), 0, 75, 128, 0)
@@ -464,7 +448,7 @@ while running:
 			running = False
 
 		if event.type == pygame.MOUSEMOTION:
-			mouse_velocity += event.rel[0] * .1
+			mouse_velocity += event.rel[0] * .05
 
 		if event.type == pygame.KEYDOWN:
 			if pygame.key.get_pressed()[pygame.K_SPACE]:
