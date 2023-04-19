@@ -287,6 +287,7 @@ def scan_line(player, level, buffer, sprite_list):
 						interpolation = 2 * y - buffer.shape[1]
 
 						if interpolation != 0:
+							#floor_distance = buffer.shape[1] - interpolation
 							floor_distance = (buffer.shape[1] / interpolation) / numpy.cos(translated_angle - numpy.radians(player[PLAYER_ANGLE]))
 
 							translated_floor_point = (
@@ -354,7 +355,7 @@ space.gravity = (0, 0)
 pygame.init()
 pygame.mixer.init()
 
-screen_surface = pygame.display.set_mode((256, 256), pygame.SCALED, vsync=True)
+screen_surface = pygame.display.set_mode((512, 512), pygame.SCALED, vsync=True)
 pygame.mouse.set_visible(False)
 pygame.event.set_grab(True)
 
@@ -426,7 +427,7 @@ level = (
 sprite_list = (
 	((66, 70, 0), tree_thing),
 	((69, 70, 0), table_thing),
-	((67, 69, 0), armor_thing),
+	((67, 68, 0), armor_thing),
 )
 
 walls_physics_shape_information = []
@@ -487,7 +488,7 @@ while running:
 			running = False
 
 		if event.type == pygame.MOUSEMOTION:
-			mouse_velocity += event.rel[0] * 2
+			mouse_velocity += event.rel[0] * .1
 
 		if event.type == pygame.KEYDOWN:
 			if pygame.key.get_pressed()[pygame.K_SPACE]:
