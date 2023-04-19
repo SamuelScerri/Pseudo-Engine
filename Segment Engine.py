@@ -321,11 +321,11 @@ def scan_line(player, level, buffer, sprite_list):
 						if dist < intersected_walls[wall][INTERSECTED_DISTANCE]:
 							if wall == 0:
 								if sprite_height_list[i] == (0, 0, 0, 0, 0):
-									sprite_height_list[i] = (clamp_in_order((half_height - sprite_height) + 2 * sprite_height * (-player[PLAYER_OFFSET]), 0, buffer.shape[1]), clamp_in_order((half_height + sprite_height) - 2 * sprite_height * (player[PLAYER_OFFSET]), 0, buffer.shape[1]), sprite_height, x_pos, darkness)
+									sprite_height_list[i] = (clamp_in_order((half_height - sprite_height) + 2 * sprite_height * (-player[PLAYER_OFFSET] + ordered_sprites[i][0][2]), 0, buffer.shape[1]), clamp_in_order((half_height + sprite_height) - 2 * sprite_height * (player[PLAYER_OFFSET]+ ordered_sprites[i][0][2]), 0, buffer.shape[1]), sprite_height, x_pos, darkness)
 
 							elif dist > intersected_walls[wall - 1][INTERSECTED_DISTANCE]:
 								if sprite_height_list[i] == (0, 0, 0, 0, 0):
-									sprite_height_list[i] = (clamp_in_order((half_height - sprite_height) + 2 * sprite_height * (-player[PLAYER_OFFSET]), previous_ceiling_height[1], previous_floor_height[0]), clamp_in_order((half_height + sprite_height) - 2 * sprite_height * (player[PLAYER_OFFSET]), previous_ceiling_height[1], previous_floor_height[0]), sprite_height, x_pos, darkness)
+									sprite_height_list[i] = (clamp_in_order((half_height - sprite_height) + 2 * sprite_height * (-player[PLAYER_OFFSET] + ordered_sprites[i][0][2]), previous_ceiling_height[1], previous_floor_height[0]), clamp_in_order((half_height + sprite_height) - 2 * sprite_height * (player[PLAYER_OFFSET] + ordered_sprites[i][0][2]), previous_ceiling_height[1], previous_floor_height[0]), sprite_height, x_pos, darkness)
 
 				#These Are Stored For Later Comparisions
 				previous_floor_height = floor_height
@@ -334,8 +334,8 @@ def scan_line(player, level, buffer, sprite_list):
 		#We Will Draw The Sprites Here As Overlays
 		for i in range(len(sprite_height_list)):
 			for y_loop in range(sprite_height_list[i][0], sprite_height_list[i][1]):
-				if ordered_sprites[i][1][int((x - (sprite_height_list[i][3] + sprite_height_list[i][2])) / sprite_height_list[i][2] * 32), int((y_loop - ((half_height + sprite_height_list[i][2]) - 2 * sprite_height_list[i][2] * player[PLAYER_OFFSET])) / sprite_height_list[i][2] * 32)] != 9357180:
-					color_value = convert_int_rgb(ordered_sprites[i][1][int((x - (sprite_height_list[i][3] + sprite_height_list[i][2])) / sprite_height_list[i][2] * 32), int((y_loop - ((half_height + sprite_height_list[i][2]) - 2 * sprite_height_list[i][2] * player[PLAYER_OFFSET])) / sprite_height_list[i][2] * 32)])
+				if ordered_sprites[i][1][int((x - (sprite_height_list[i][3] + sprite_height_list[i][2])) / sprite_height_list[i][2] * 32), int((y_loop - ((half_height + sprite_height_list[i][2]) - 2 * sprite_height_list[i][2] * (player[PLAYER_OFFSET] + ordered_sprites[i][0][2]))) / sprite_height_list[i][2] * 32)] != 9357180:
+					color_value = convert_int_rgb(ordered_sprites[i][1][int((x - (sprite_height_list[i][3] + sprite_height_list[i][2])) / sprite_height_list[i][2] * 32), int((y_loop - ((half_height + sprite_height_list[i][2]) - 2 * sprite_height_list[i][2] * (player[PLAYER_OFFSET] + ordered_sprites[i][0][2])))/ sprite_height_list[i][2] * 32)])
 					buffer[x, y_loop] = mix(color_value, (sprite_height_list[i][4], sprite_height_list[i][4], sprite_height_list[i][4]))		
 
 	return offset
@@ -425,9 +425,9 @@ level = (
 )
 
 sprite_list = (
-	((66, 70, 0), tree_thing),
-	((69, 70, 0), table_thing),
-	((67, 68, 0), armor_thing),
+	((66, 70, 0.0), tree_thing),
+	((69, 70, 0.2), table_thing),
+	((67, 68, 0.0), armor_thing),
 )
 
 walls_physics_shape_information = []
