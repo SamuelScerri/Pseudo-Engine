@@ -132,15 +132,27 @@ def get_closest_wall(position, translated_point, level):
 
 @numba.jit(nopython=True, nogil=True, cache=True, fastmath=True)
 def get_closest_sprite(position, sprite_list):
-	for i in range(len(sprite_list)):
-		for j in range(0, len(sprite_list) - i - 1):
-			pass
-			#Calculate Distance
-			#distance = sprite_list[j]
+	ordered_sprites = []
 
-			#if sprite_list[j]
+	for s in sprite_list:
+		ordered_sprites.append(s)
 
-	return 1
+	for i in range(len(ordered_sprites)):
+		for j in range(0, len(ordered_sprites) - i - 1):
+			dx = ordered_sprites[j][0][0] - position[0]
+			dy = ordered_sprites[j][0][1] - position[1]
+
+			dist = numpy.sqrt(dx * dx + dy * dy)
+
+			dx2 = ordered_sprites[j + 1][0][0] - position[0]
+			dy2 = ordered_sprites[j + 1][0][1] - position[1]
+
+			dist2 = numpy.sqrt(dx2 * dx2 + dy2 * dy2)
+
+			if dist < dist2:
+				ordered_sprites[j], ordered_sprites[j + 1] = ordered_sprites[j + 1], ordered_sprites[j]
+
+	return ordered_sprites
 
 #Scan The Entire Screen From Left To Right & Render The Walls & Floors
 @numba.jit(nopython=True, nogil=True, cache=True, fastmath=True)
@@ -150,6 +162,9 @@ def scan_line(player, level, buffer, sprite_list):
 	half_height = buffer.shape[1] / 2
 
 	offset = 0
+
+
+	ordered_sprites = get_closest_sprite(player[PLAYER_POSITION], sprite_list)
 
 	for x in range(buffer.shape[0]):
 		final_position = (0, 0, 0, 0)
@@ -171,7 +186,7 @@ def scan_line(player, level, buffer, sprite_list):
 
 		sprite_height_list = []
 
-		for i in range(len(sprite_list)):
+		for i in range(len(ordered_sprites)):
 			sprite_height_list.append((0, 0, 0, 0, 0.0))
 
 		for wall in range(len(intersected_walls)):
@@ -284,8 +299,8 @@ def scan_line(player, level, buffer, sprite_list):
 							buffer[x, y] = mix(color_value, (darkness, darkness, darkness))
 				
 				for i in range(len(sprite_height_list)):
-					dx = sprite_list[i][0][0] - player[PLAYER_POSITION][0]
-					dy = sprite_list[i][0][1] - player[PLAYER_POSITION][1]
+					dx = ordered_sprites[i][0][0] - player[PLAYER_POSITION][0]
+					dy = ordered_sprites[i][0][1] - player[PLAYER_POSITION][1]
 
 					dist = numpy.sqrt(dx * dx + dy * dy)
 
@@ -318,8 +333,8 @@ def scan_line(player, level, buffer, sprite_list):
 		#We Will Draw The Sprites Here As Overlays
 		for i in range(len(sprite_height_list)):
 			for y_loop in range(sprite_height_list[i][0], sprite_height_list[i][1]):
-				if sprite_list[i][1][int((x - (sprite_height_list[i][3] + sprite_height_list[i][2])) / sprite_height_list[i][2] * 32), int((y_loop - ((half_height + sprite_height_list[i][2]) - 2 * sprite_height_list[i][2] * player[PLAYER_OFFSET])) / sprite_height_list[i][2] * 32)] != 9357180:
-					color_value = convert_int_rgb(sprite_list[i][1][int((x - (sprite_height_list[i][3] + sprite_height_list[i][2])) / sprite_height_list[i][2] * 32), int((y_loop - ((half_height + sprite_height_list[i][2]) - 2 * sprite_height_list[i][2] * player[PLAYER_OFFSET])) / sprite_height_list[i][2] * 32)])
+				if ordered_sprites[i][1][int((x - (sprite_height_list[i][3] + sprite_height_list[i][2])) / sprite_height_list[i][2] * 32), int((y_loop - ((half_height + sprite_height_list[i][2]) - 2 * sprite_height_list[i][2] * player[PLAYER_OFFSET])) / sprite_height_list[i][2] * 32)] != 9357180:
+					color_value = convert_int_rgb(ordered_sprites[i][1][int((x - (sprite_height_list[i][3] + sprite_height_list[i][2])) / sprite_height_list[i][2] * 32), int((y_loop - ((half_height + sprite_height_list[i][2]) - 2 * sprite_height_list[i][2] * player[PLAYER_OFFSET])) / sprite_height_list[i][2] * 32)])
 					buffer[x, y_loop] = mix(color_value, (sprite_height_list[i][4], sprite_height_list[i][4], sprite_height_list[i][4]))		
 
 	return offset
@@ -339,7 +354,7 @@ space.gravity = (0, 0)
 pygame.init()
 pygame.mixer.init()
 
-screen_surface = pygame.display.set_mode((512, 512), pygame.SCALED, vsync=True)
+screen_surface = pygame.display.set_mode((256, 256), pygame.SCALED, vsync=True)
 pygame.mouse.set_visible(False)
 pygame.event.set_grab(True)
 
@@ -359,6 +374,8 @@ basic_wall_4 = pygame.surfarray.array2d(pygame.image.load("texture4.png").conver
 basic_wall_5 = pygame.surfarray.array2d(pygame.image.load("texture5.png").convert())
 
 tree_thing = pygame.surfarray.array2d(pygame.image.load("tree.png").convert())
+table_thing = pygame.surfarray.array2d(pygame.image.load("table.png").convert())
+armor_thing = pygame.surfarray.array2d(pygame.image.load("armor.png").convert())
 
 #Create Player
 player = ((66, 69), 0, 75, 128, 0)
@@ -408,7 +425,8 @@ level = (
 
 sprite_list = (
 	((66, 70, 0), tree_thing),
-	((69, 70, 0), tree_thing)
+	((69, 70, 0), table_thing),
+	((67, 69, 0), armor_thing),
 )
 
 walls_physics_shape_information = []
@@ -469,7 +487,7 @@ while running:
 			running = False
 
 		if event.type == pygame.MOUSEMOTION:
-			mouse_velocity += event.rel[0] * .05
+			mouse_velocity += event.rel[0] * 2
 
 		if event.type == pygame.KEYDOWN:
 			if pygame.key.get_pressed()[pygame.K_SPACE]:
