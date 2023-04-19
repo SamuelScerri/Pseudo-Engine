@@ -111,9 +111,6 @@ def get_closest_wall(position, translated_point, level):
 	#This Will Order By Segments
 	#We Are Going To Loop Backwards Here
 	while len(all_walls_intersected) != 0:
-		#print(len(all_walls_intersected))
-		#current_wall_checked = all_walls_intersected.pop(len(all_walls_intersected) - 1)
-
 		walls_obtained = [len(all_walls_intersected) - 1]
 		offset = 0
 
@@ -355,7 +352,9 @@ space.gravity = (0, 0)
 pygame.init()
 pygame.mixer.init()
 
-screen_surface = pygame.display.set_mode((512, 512), pygame.SCALED, vsync=True)
+pygame.display.set_caption("Segment Engine - ALPHA")
+screen_surface = pygame.display.set_mode((256, 256), pygame.SCALED, vsync=True)
+
 pygame.mouse.set_visible(False)
 pygame.event.set_grab(True)
 
@@ -504,18 +503,6 @@ while running:
 
 		current_offset = offset
 
-		#if should_jump and current_offset == offset:
-		#	gravity_velocity = .12
-		#	should_jump = False
-
-		#gravity_velocity -= .02
-		#current_offset += gravity_velocity
-
-		#if current_offset < offset:
-			#current_offset = offset
-			#gravity_velocity = 0
-
-
 		#Direction Here Is Normalized For Diagonal Movement,
 		#Without It Diagonal Movement Will Be Faster
 		direction = normalize((
@@ -593,35 +580,11 @@ while running:
 		interpolated_bobbing,
 	)
 
-	#print(player_body.position)
-
 	#This Is Where The Magic Happens! We Will Also Get The Current Offset Of The Segment That The Player Is On, So That They Will Be Raised Accordingly
 	offset = scan_line(player, level, buffer, sprite_list)
 	pygame.surfarray.blit_array(screen_surface, buffer)
 
 	screen_surface.blit(font.render("FPS: " + str(int(fps)), False, (255, 255, 255)), (0, 0))
-	#print(interpolated_rotation)
-
-	#Translate Position
-	#dx = 66 - interpolated_position[0]
-	#dy = 70 - interpolated_position[1]
-
-	#dist = numpy.sqrt(dx * dx + dy * dy)
-
-	#dist = numpy.sqrt(dx * dx + dy * dy)
-	#theta = numpy.degrees(numpy.arctan2(-dy, dx))
-	#interpolated_rotation %= 360
-
-	#y = (-interpolated_rotation + (player[PLAYER_VISION] / 2) - theta)
-
-	#if y < -180:
-	#	y += 360
-	#x = y * (512 / player[PLAYER_VISION])
-	#tree_height = (256 / dist)
-
-	#sized_thing = pygame.transform.scale(tree_thing, (tree_height, tree_height))
-
-	#screen_surface.blit(sized_thing, (x - sized_thing.get_width() / 2, 256))
 	pygame.display.flip()
 
 	#This Is Unecessary In Closed Areas, But Performance Seems To Be Very Minimal, Might Be Removed After
@@ -633,7 +596,9 @@ while running:
 
 	new_time = pygame.time.get_ticks()
 	update_rate += (new_time - previous_time)
-	fps = 1 / ((new_time - previous_time) / 1000)
+
+	if ((new_time - previous_time) / 1000) != 0:
+		fps = 1 / ((new_time - previous_time) / 1000)
 
 	#Why Not Multiply By Delta Time? Physics Needs To Be Consistent, And Using Delta Time
 	#For Physics Is Not Good Practise, We Also Can Have An Easier Time Implement Logic,
