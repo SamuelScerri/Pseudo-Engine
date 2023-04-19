@@ -130,10 +130,21 @@ def get_closest_wall(position, translated_point, level):
 
 	return segmented_order
 
+@numba.jit(nopython=True, nogil=True, cache=True, fastmath=True)
+def get_closest_sprite(position, sprite_list):
+	for i in range(len(sprite_list)):
+		for j in range(0, len(sprite_list) - i - 1):
+			pass
+			#Calculate Distance
+			#distance = sprite_list[j]
+
+			#if sprite_list[j]
+
+	return 1
 
 #Scan The Entire Screen From Left To Right & Render The Walls & Floors
 @numba.jit(nopython=True, nogil=True, cache=True, fastmath=True)
-def scan_line(player, level, buffer, tree_thing):
+def scan_line(player, level, buffer, sprite_list):
 	#Obtain The Interval Angle To Rotate Correctly
 	interval_angle = player[2] / buffer.shape[0]
 	half_height = buffer.shape[1] / 2
@@ -142,7 +153,6 @@ def scan_line(player, level, buffer, tree_thing):
 
 	for x in range(buffer.shape[0]):
 		final_position = (0, 0, 0, 0)
-		found = False
 
 		#Translate All Points According To Angle
 		translated_angle = numpy.radians((player[PLAYER_ANGLE] - player[PLAYER_VISION] / 2) + interval_angle * x)
@@ -153,10 +163,16 @@ def scan_line(player, level, buffer, tree_thing):
 
 		#We Get All The Intersected Walls From Closest To Furthest
 		intersected_walls = get_closest_wall(player[PLAYER_POSITION], translated_point, level)
+		closest_sprites = get_closest_sprite(player[PLAYER_POSITION], sprite_list)
 
 		#Previous Wall Information For Comparision
 		previous_floor_height = (0, 0)
 		previous_ceiling_height = (0, 0)
+
+		sprite_height_list = []
+
+		for i in range(len(sprite_list)):
+			sprite_height_list.append((0, 0, 0, 0, 0.0))
 
 		for wall in range(len(intersected_walls)):
 			if intersected_walls[wall][INTERSECTED_DISTANCE] != 0:
@@ -267,44 +283,44 @@ def scan_line(player, level, buffer, tree_thing):
 
 							buffer[x, y] = mix(color_value, (darkness, darkness, darkness))
 				
-				dx = 66 - player[PLAYER_POSITION][0]
-				dy = 70 - player[PLAYER_POSITION][1]
+				for i in range(len(sprite_height_list)):
+					dx = sprite_list[i][0][0] - player[PLAYER_POSITION][0]
+					dy = sprite_list[i][0][1] - player[PLAYER_POSITION][1]
 
-				dist = numpy.sqrt(dx * dx + dy * dy)
+					dist = numpy.sqrt(dx * dx + dy * dy)
 
-				theta = numpy.degrees(numpy.arctan2(-dy, dx))
-				fixed_rotation = player[PLAYER_ANGLE] % 360
+					theta = numpy.degrees(numpy.arctan2(-dy, dx))
+					fixed_rotation = player[PLAYER_ANGLE] % 360
 
-				y = (-fixed_rotation + (player[PLAYER_VISION] / 2) - theta)
+					y = (-fixed_rotation + (player[PLAYER_VISION] / 2) - theta)
 
-				if y < -180:
-					y += 360
+					if y < -180:
+						y += 360
 			
-				x_pos = y * (buffer.shape[0] / player[PLAYER_VISION])
-				sprite_height = (half_height / dist)
-				darkness = clamp_in_order(lerp(0, 1, 1 / dist), 0, 1)
+					x_pos = y * (buffer.shape[0] / player[PLAYER_VISION])
+					sprite_height = (half_height / dist)
+					darkness = clamp_in_order(lerp(0, 1, 1 / dist), 0, 1)
 
-				if x > x_pos - sprite_height and x < x_pos + sprite_height:
-					if dist < intersected_walls[wall][INTERSECTED_DISTANCE]:
-						if wall == 0:
-							if not found:
-								final_position = (clamp_in_order((half_height - sprite_height) + 2 * sprite_height * (-player[PLAYER_OFFSET]), 0, buffer.shape[1]), clamp_in_order((half_height + sprite_height) - 2 * sprite_height * (player[PLAYER_OFFSET]), 0, buffer.shape[1]), sprite_height, x_pos)
-								found = True
+					if x > x_pos - sprite_height and x < x_pos + sprite_height:
+						if dist < intersected_walls[wall][INTERSECTED_DISTANCE]:
+							if wall == 0:
+								if sprite_height_list[i] == (0, 0, 0, 0, 0):
+									sprite_height_list[i] = (clamp_in_order((half_height - sprite_height) + 2 * sprite_height * (-player[PLAYER_OFFSET]), 0, buffer.shape[1]), clamp_in_order((half_height + sprite_height) - 2 * sprite_height * (player[PLAYER_OFFSET]), 0, buffer.shape[1]), sprite_height, x_pos, darkness)
 
-						elif dist > intersected_walls[wall - 1][INTERSECTED_DISTANCE]:
-							if not found:
-								final_position = (clamp_in_order((half_height - sprite_height) + 2 * sprite_height * (-player[PLAYER_OFFSET]), previous_ceiling_height[1], previous_floor_height[0]), clamp_in_order((half_height + sprite_height) - 2 * sprite_height * (player[PLAYER_OFFSET]), previous_ceiling_height[1], previous_floor_height[0]), sprite_height, x_pos)
-								found = True
+							elif dist > intersected_walls[wall - 1][INTERSECTED_DISTANCE]:
+								if sprite_height_list[i] == (0, 0, 0, 0, 0):
+									sprite_height_list[i] = (clamp_in_order((half_height - sprite_height) + 2 * sprite_height * (-player[PLAYER_OFFSET]), previous_ceiling_height[1], previous_floor_height[0]), clamp_in_order((half_height + sprite_height) - 2 * sprite_height * (player[PLAYER_OFFSET]), previous_ceiling_height[1], previous_floor_height[0]), sprite_height, x_pos, darkness)
 
 				#These Are Stored For Later Comparisions
 				previous_floor_height = floor_height
 				previous_ceiling_height = ceiling_height
 
 		#We Will Draw The Sprites Here As Overlays
-		for y_loop in range(final_position[0], final_position[1]):
-			if tree_thing[int((x - (final_position[3] + final_position[2])) / final_position[2] * 32), int((y_loop - ((half_height + final_position[2]) - 2 * final_position[2] * player[PLAYER_OFFSET])) / final_position[2] * 32)] != 9357180:
-				color_value = convert_int_rgb(tree_thing[int((x - (final_position[3] + final_position[2])) / final_position[2] * 32), int((y_loop - ((half_height + final_position[2]) - 2 * final_position[2] * player[PLAYER_OFFSET])) / final_position[2] * 32)])
-				buffer[x, y_loop] = mix(color_value, (darkness, darkness, darkness))		
+		for i in range(len(sprite_height_list)):
+			for y_loop in range(sprite_height_list[i][0], sprite_height_list[i][1]):
+				if sprite_list[i][1][int((x - (sprite_height_list[i][3] + sprite_height_list[i][2])) / sprite_height_list[i][2] * 32), int((y_loop - ((half_height + sprite_height_list[i][2]) - 2 * sprite_height_list[i][2] * player[PLAYER_OFFSET])) / sprite_height_list[i][2] * 32)] != 9357180:
+					color_value = convert_int_rgb(sprite_list[i][1][int((x - (sprite_height_list[i][3] + sprite_height_list[i][2])) / sprite_height_list[i][2] * 32), int((y_loop - ((half_height + sprite_height_list[i][2]) - 2 * sprite_height_list[i][2] * player[PLAYER_OFFSET])) / sprite_height_list[i][2] * 32)])
+					buffer[x, y_loop] = mix(color_value, (sprite_height_list[i][4], sprite_height_list[i][4], sprite_height_list[i][4]))		
 
 	return offset
 
@@ -323,7 +339,7 @@ space.gravity = (0, 0)
 pygame.init()
 pygame.mixer.init()
 
-screen_surface = pygame.display.set_mode((512, 512), pygame.SCALED | pygame.FULLSCREEN, vsync=True)
+screen_surface = pygame.display.set_mode((512, 512), pygame.SCALED, vsync=True)
 pygame.mouse.set_visible(False)
 pygame.event.set_grab(True)
 
@@ -388,6 +404,11 @@ level = (
 	((70.0, 71.0), (70.0, 74.0), 0.4, 0.0, 6, basic_wall_2, basic_wall_3),
 	((70.0, 74.0), (71.5, 72.0), 0.4, 0.0, 6, basic_wall_2, basic_wall_3),
 	((71.5, 72.0), (71.5, 71.0), 0.4, 0.0, 6, basic_wall_2, basic_wall_3),
+)
+
+sprite_list = (
+	((66, 70, 0), tree_thing),
+	((69, 70, 0), tree_thing)
 )
 
 walls_physics_shape_information = []
@@ -556,7 +577,7 @@ while running:
 	#print(player_body.position)
 
 	#This Is Where The Magic Happens! We Will Also Get The Current Offset Of The Segment That The Player Is On, So That They Will Be Raised Accordingly
-	offset = scan_line(player, level, buffer, tree_thing)
+	offset = scan_line(player, level, buffer, sprite_list)
 	pygame.surfarray.blit_array(screen_surface, buffer)
 
 	screen_surface.blit(font.render("FPS: " + str(int(fps)), False, (255, 255, 255)), (0, 0))
